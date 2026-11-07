@@ -88,7 +88,7 @@ Per OS:
 
 ## Deploy the web app
 
-The landing page and browser demos (without the relay) are published to GitHub Pages by [.github/workflows/pages.yml](.github/workflows/pages.yml) on every push to `main`: https://pratyush3124.github.io/PhoneWand/. `npm run build:web -- --base /PhoneWand/` builds that static copy into `site/`.
+The landing page and browser demos (without the relay) are published to GitHub Pages (from the `gh-pages` branch) by [.github/workflows/pages.yml](.github/workflows/pages.yml) on every push to `main`: https://pratyush3124.github.io/PhoneWand/. `npm run build:web -- --base /PhoneWand/` builds that static copy into `site/`.
 
 Phones need HTTPS, so hosting the web app on any HTTPS platform removes the tunnel step for the browser demos:
 
