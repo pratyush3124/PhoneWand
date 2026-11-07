@@ -4,7 +4,6 @@ name: Landing page
 on:
   push:
     branches: [main]
-    paths: ["public/**", "scripts/build-web.mjs", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 permissions:
