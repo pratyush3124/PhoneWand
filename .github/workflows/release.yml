@@ -1,4 +1,4 @@
-# Builds the desktop app on Windows, macOS and Linux.
+# Builds the desktop app on Windows, macOS (Apple silicon and Intel) and Linux (x64).
 # Push a tag like v1.0.0 to attach the archives to a GitHub release, or run it by hand
 # (Actions > Desktop builds > Run workflow) to get them as workflow artifacts.
 name: Desktop builds
@@ -11,7 +11,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest, macos-latest, macos-15-intel, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +22,19 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build:desktop
+      # The packaged executable starts (its bundle and SEA blob are intact)
+      - name: Smoke test
+        shell: bash
+        run: |
+          app=$(ls -d dist/phonewand-*/ | head -1)
+          if [ -f "$app/PhoneWand.exe" ]; then "$app/PhoneWand.exe" --help; else "$app/phonewand" --help; fi
+      # On Linux, also load the mouse library in a virtual X11 display and print a room
+      - name: Smoke test (Linux, X11)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y xvfb
+          (PHONEWAND_TERMINAL=1 timeout 15 xvfb-run -a dist/phonewand-linux-x64/phonewand --no-tunnel || true) | tee out.txt
+          grep -q "Room " out.txt
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.os }}

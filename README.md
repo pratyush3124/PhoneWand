@@ -78,11 +78,17 @@ On the Yes/No page: `←` highlights Yes, `→` highlights No, `↓` clears, `En
 
 Double-clicking the app starts its own relay, opens a Cloudflare quick tunnel when `cloudflared` is installed (on PATH, in its default install folder, or next to the app), and prints the QR code. No terminal setup needed.
 
-Build each OS on that OS. [.github/workflows/release.yml](.github/workflows/release.yml) does Windows, macOS and Linux in CI: push a tag like `v1.0.0` to attach the archives to a GitHub release, or run the workflow by hand to get them as artifacts. Copy them into `downloads/` on the server to offer them on the landing page.
+Build each OS on that OS. [.github/workflows/release.yml](.github/workflows/release.yml) builds Windows x64, macOS (Apple silicon and Intel) and Linux x64 in CI, and smoke-tests each executable (on Linux it also loads the mouse library in a virtual X11 display). Push a tag like `v1.0.0` to attach the archives to a GitHub release, or run the workflow by hand to get them as artifacts. The landing page lists the server's `downloads/` folder, and falls back to the latest GitHub release when that's empty.
 
-The builds aren't code-signed: Windows SmartScreen shows "unknown publisher" (More info → Run anyway), and on macOS the first launch needs right-click → Open.
+Per OS:
+
+- **Windows:** not code-signed, so SmartScreen shows "unknown publisher" (More info → Run anyway).
+- **macOS:** not notarized. The first launch is blocked: System Settings → Privacy & Security → Open Anyway (or `xattr -dr com.apple.quarantine .` in the unzipped folder). Double-clicking `phonewand` opens it in Terminal. It asks for Accessibility permission for Terminal and waits until it's granted. The phone's Ctrl key acts as Command.
+- **Linux:** x64 and X11 only (the mouse library has no arm64 build, and Wayland blocks synthetic input; the app says so instead of crashing). Needs `libxtst6`. Double-clicking it in a file manager reopens it in a terminal window.
 
 ## Deploy the web app
+
+The landing page and browser demos (without the relay) are published to GitHub Pages by [.github/workflows/pages.yml](.github/workflows/pages.yml) on every push to `main` that touches `public/`: https://pratyush3124.github.io/PhoneWand/. `npm run build:web -- --base /PhoneWand/` builds that static copy into `site/`.
 
 Phones need HTTPS, so hosting the web app on any HTTPS platform removes the tunnel step for the browser demos:
 

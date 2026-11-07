@@ -1,10 +1,15 @@
 // Builds the static site for hosts without WebSockets (Vercel): landing page,
 // demo pages, QR library and the desktop downloads, into site/.
 //   npm run build:web && vercel deploy --prod
+//   npm run build:web -- --base /PhoneWand/     (GitHub Pages project site, served under a subpath)
 // The relay isn't included; the landing page notices (no /healthz) and says so.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
+
+const { values: opts } = parseArgs({ options: { base: { type: "string", default: "/" } } });
+const base = ("/" + opts.base + "/").replace(/\/+/g, "/");
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const site = path.join(root, "site");
@@ -22,4 +27,14 @@ const files = fs.readdirSync(path.join(root, "downloads"))
     return { name: f, size: fs.statSync(path.join(dl, f)).size };
   });
 fs.writeFileSync(path.join(dl, "index.json"), JSON.stringify({ files }));
-console.log(`site/ ready with ${files.length} download(s): ${files.map((f) => f.name).join(", ") || "none"}`);
+// Hosts without rewrites (GitHub Pages) serve /yesno from yesno.html.
+fs.copyFileSync(path.join(site, "app.html"), path.join(site, "yesno.html"));
+
+// Root-relative links and imports ("/play", "/pairing.js") point under the base path.
+if (base !== "/") {
+  for (const f of fs.readdirSync(site).filter((f) => /\.(html|js)$/.test(f))) {
+    const file = path.join(site, f);
+    fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace(/((?:href|src)\s*=\s*|from\s+|import\(|fetch\()(["'`])\/(?!\/)/g, `$1$2${base}`));
+  }
+}
+console.log(`site/ (base ${base})  ready with ${files.length} download(s): ${files.map((f) => f.name).join(", ") || "none"}`);

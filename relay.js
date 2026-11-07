@@ -73,6 +73,8 @@ export function createRelay({ root, downloads = path.join(root, "downloads") }) 
   // rooms: Map<roomId, { clients: Set<ws>, lastActive: number }>
   const rooms = new Map();
   const wss = new WebSocketServer({ server, path: "/ws", maxPayload: 4096 });
+  // ws re-emits the HTTP server's errors (e.g. EADDRINUSE); whoever calls listen() handles those.
+  wss.on("error", () => {});
 
   wss.on("connection", (ws, req) => {
     const q = new URL(req.url, "http://localhost").searchParams;

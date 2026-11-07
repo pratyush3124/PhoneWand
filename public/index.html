@@ -100,6 +100,11 @@
     .note { font-size: .88rem; color: var(--muted); background: var(--soft); border-radius: 10px; padding: 10px 12px; }
     .note code, p code, li code { font: .88em ui-monospace, SFMono-Regular, Consolas, monospace; background: var(--soft); padding: 1px 5px; border-radius: 5px; }
     .note code { background: var(--card); }
+    .note a { color: inherit; }
+    .firstrun { display: grid; gap: 6px; }
+    .firstrun details { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: .9rem; }
+    .firstrun summary { cursor: pointer; font-weight: 600; }
+    .firstrun p { margin: 8px 0 2px; color: var(--muted); }
 
     .gestures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
     .g { background: var(--card); padding: 22px; display: flex; gap: 14px; align-items: flex-start; }
@@ -218,7 +223,16 @@
             <div class="note">Looking for downloads…</div>
           </div>
           <div class="note">The app uses a free Cloudflare tunnel to give your phone an HTTPS link. Install it once:
-            <code>winget install --id Cloudflare.cloudflared</code> on Windows or <code>brew install cloudflared</code> on macOS.</div>
+            <code>winget install --id Cloudflare.cloudflared</code> on Windows, <code>brew install cloudflared</code> on macOS,
+            or the package from <a href="https://pkg.cloudflare.com">pkg.cloudflare.com</a> on Linux.</div>
+          <div class="firstrun" id="firstRun">
+            <details data-os="windows"><summary>First run on Windows</summary>
+              <p>Unzip and double-click <code>PhoneWand.exe</code>. SmartScreen warns about an unknown publisher (the app isn't code-signed): choose <b>More info → Run anyway</b>.</p></details>
+            <details data-os="macos"><summary>First run on macOS</summary>
+              <p>Unzip and double-click <code>phonewand</code>; it opens in Terminal. The app isn't notarized, so macOS blocks it the first time: go to <b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b>. Then switch on <b>Terminal</b> under <b>Accessibility</b> so it can move the mouse; the app waits until you do. Ctrl on the phone keyboard acts as Command.</p></details>
+            <details data-os="linux"><summary>First run on Linux</summary>
+              <p>Extract and run <code>./phonewand</code> (or double-click it to open a terminal). It needs an <b>X11 session</b>, since Wayland blocks apps from moving the mouse: on Ubuntu or Fedora, pick <b>GNOME on Xorg</b> on the login screen. x64 only. If it asks for libXtst: <code>sudo apt install libxtst6</code>.</p></details>
+          </div>
         </div>
         <div class="card">
           <span class="tag">In the browser</span>
@@ -282,6 +296,9 @@
 
   <script>
     const OS_NAMES = { windows: "Windows", macos: "macOS", linux: "Linux" };
+    const ARCH_NAMES = { macos: { arm64: "Apple silicon", x64: "Intel" }, linux: { x64: "x64 · X11" } };
+    // Builds published as GitHub release assets, used when this server has none (e.g. GitHub Pages).
+    const RELEASES = "https://api.github.com/repos/pratyush3124/PhoneWand/releases/latest";
     const ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>';
 
     function myOs() {
@@ -291,41 +308,56 @@
       if (p.includes("linux") && !/android/.test(navigator.userAgent.toLowerCase())) return "linux";
       return null;
     }
+    // Chromium tells us the CPU; elsewhere assume Apple silicon for Macs.
+    async function myArch() {
+      try { return (await navigator.userAgentData.getHighEntropyValues(["architecture"])).architecture === "x86" ? "x64" : "arm64"; }
+      catch { return "arm64"; }
+    }
+    const kind = (name) => name.endsWith(".zip") ? "zip" : "tar.gz";
     const mb = (n) => (n / 1e6).toFixed(0) + " MB";
     const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
     async function loadDownloads() {
       const list = document.getElementById("downloads");
       let files = [];
-      try { files = (await (await fetch("/downloads/")).json()).files || []; } catch {}
+      try { files = ((await (await fetch("/downloads/")).json()).files || []).map((f) => ({ ...f, url: "/downloads/" + encodeURIComponent(f.name) })); } catch {}
+      if (!files.length) {
+        try { files = ((await (await fetch(RELEASES)).json()).assets || []).map((a) => ({ name: a.name, size: a.size, url: a.browser_download_url })); } catch {}
+      }
       const builds = files.map((f) => {
         const m = f.name.match(/^phonewand-(windows|macos|linux)-([a-z0-9]+)\./);
         return m && { ...f, os: m[1], arch: m[2] };
       }).filter(Boolean);
       const os = myOs();
-      builds.sort((a, b) => (b.os === os) - (a.os === os));
+      const arch = os === "macos" ? await myArch() : "x64";
+      const score = (b) => (b.os === os) * 2 + (b.arch === arch);
+      builds.sort((a, b) => score(b) - score(a));
 
       if (!builds.length) {
-        list.innerHTML = '<div class="note">No builds on this server yet. Build one with <code>npm run build:desktop</code>, or run it from source with <code>npm install</code> then <code>npm run mouse</code>.</div>';
+        list.innerHTML = '<div class="note">No builds published yet. Build one with <code>npm run build:desktop</code>, or run it from <a href="https://github.com/pratyush3124/PhoneWand">source</a> with <code>npm install</code> then <code>npm run mouse</code>.</div>';
         return;
       }
-      list.innerHTML = builds.map((b) =>
-        `<a class="dl${b.os === os ? " mine" : ""}" href="/downloads/${encodeURIComponent(b.name)}" download>${ICON}` +
-        `<span><span class="os">${OS_NAMES[b.os]}</span> <small>${esc(b.arch)}</small></span>` +
-        `<span class="meta">${b.name.endsWith(".zip") ? "zip" : "tar.gz"} · ${mb(b.size)}</span></a>`).join("");
-
       const mine = builds.find((b) => b.os === os);
+      list.innerHTML = builds.map((b) =>
+        `<a class="dl${b === mine ? " mine" : ""}" href="${esc(b.url)}" download>${ICON}` +
+        `<span><span class="os">${OS_NAMES[b.os]}</span> <small>${esc(ARCH_NAMES[b.os]?.[b.arch] ?? b.arch)}</small></span>` +
+        `<span class="meta">${kind(b.name)} · ${mb(b.size)}</span></a>`).join("");
+
       if (mine) {
         const btn = document.getElementById("heroDownload");
-        btn.href = "/downloads/" + encodeURIComponent(mine.name);
+        btn.href = mine.url;
         btn.setAttribute("download", "");
         document.getElementById("heroDownloadText").textContent = `Download for ${OS_NAMES[mine.os]}`;
         const others = [...new Set(builds.filter((b) => b.os !== mine.os).map((b) => OS_NAMES[b.os]))];
         document.getElementById("heroFine").textContent =
-          [`${mb(mine.size)} zip`, others.length && `also for ${others.join(" and ")}`, "works with any phone browser"].filter(Boolean).join(" · ");
+          [`${mb(mine.size)} ${kind(mine.name)}`, others.length && `also for ${others.join(" and ")}`, "works with any phone browser"].filter(Boolean).join(" · ");
       }
     }
     loadDownloads();
+
+    // Open the first-run tips for this computer's OS and list it first.
+    const tips = document.querySelector(`#firstRun details[data-os="${myOs()}"]`);
+    if (tips) { tips.open = true; tips.parentNode.prepend(tips); }
 
     // Static hosting (e.g. Vercel) has no relay, so phones can't pair with the demos here.
     fetch("/healthz").then((r) => r.ok ? r.text() : "").catch(() => "").then((t) => {

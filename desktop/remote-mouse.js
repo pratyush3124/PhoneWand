@@ -25,7 +25,7 @@ import qrcode from "qrcode-generator";
 import { connectRemote, makeRoomCode } from "../public/remote-client.js";
 import { createRelay } from "../relay.js";
 import { createDesktopController } from "./controller.js";
-import { loadMouse } from "./native.js";
+import { checkPlatform, loadMouse, macAccessibility } from "./native.js";
 import { ROOT, IS_PACKAGED } from "./resources.js";
 
 const ROOM_RE = /^[A-Za-z0-9_-]{4,64}$/;
@@ -172,11 +172,52 @@ async function startTunnel(port) {
   return null;
 }
 
+// Linux file managers start a double-clicked program without a window, so the
+// packaged app reopens itself in a terminal (where the QR code and keys live).
+function reopenInTerminal() {
+  if (!IS_PACKAGED || process.platform !== "linux" || process.stdin.isTTY || process.env.PHONEWAND_TERMINAL) return false;
+  const args = [process.execPath, ...process.argv.slice(2)];
+  const terminals = [
+    ["x-terminal-emulator", "-e"], ["gnome-terminal", "--"], ["konsole", "-e"], ["xfce4-terminal", "-x"],
+    ["mate-terminal", "-x"], ["tilix", "-e"], ["kitty"], ["alacritty", "-e"], ["xterm", "-e"],
+  ];
+  const dirs = (process.env.PATH || "/usr/bin:/bin").split(":");
+  for (const [term, ...flag] of terminals) {
+    if (!dirs.some((d) => fs.existsSync(path.join(d, term)))) continue;
+    spawn(term, [...flag, ...args], {
+      detached: true,
+      stdio: "ignore",
+      env: { ...process.env, PHONEWAND_TERMINAL: "1" },
+    }).unref();
+    return true;
+  }
+  return false;
+}
+
+// Waits until the terminal running the app may control the mouse.
+async function waitForMacAccessibility() {
+  const access = macAccessibility();
+  if (!access) {
+    if (process.platform === "darwin") log("If the cursor doesn't move, allow this terminal under System Settings > Privacy & Security > Accessibility.");
+    return;
+  }
+  if (access.granted()) return;
+  access.ask();
+  console.log(
+    "\nmacOS needs your permission before PhoneWand can move the mouse.\n" +
+      "  Open System Settings > Privacy & Security > Accessibility and switch on the app\n" +
+      "  this runs in (Terminal, or your terminal app). Waiting for it...",
+  );
+  while (!access.granted()) await new Promise((r) => setTimeout(r, 1000));
+  log("Accessibility permission granted.");
+}
+
 async function main() {
   if (opts.help) {
     console.log(USAGE);
     process.exit(0);
   }
+  if (reopenInTerminal()) process.exit(0);
   console.log("\nPhoneWand: your phone is the mouse.\n");
 
   const room = opts.room ?? makeRoomCode();
@@ -207,6 +248,10 @@ async function main() {
       if (publicOrigin) log(`Tunnel ready: ${publicOrigin}`);
     }
   }
+
+  const { warning } = checkPlatform();
+  if (warning) console.log(`\n${warning}`);
+  await waitForMacAccessibility();
 
   let lib, mouse, closeMouse;
   try {

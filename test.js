@@ -526,3 +526,15 @@ test("relays the power switch", async () => {
   assert.deepEqual(await next(app, (m) => m.type === "power"), { type: "power", on: false, sid: "a" });
   phone.close(); app.close();
 });
+
+import { checkPlatform } from "./desktop/native.js";
+
+test("desktop helper: platform checks catch what the mouse library can't handle", () => {
+  assert.deepEqual(checkPlatform({}, "win32", "x64"), {});
+  assert.deepEqual(checkPlatform({}, "darwin", "arm64"), {});
+  assert.deepEqual(checkPlatform({ DISPLAY: ":0", XDG_SESSION_TYPE: "x11" }, "linux", "x64"), {});
+  assert.match(checkPlatform({ DISPLAY: ":0" }, "linux", "arm64").error, /x64/);
+  assert.match(checkPlatform({}, "linux", "x64").error, /No X11 display/);
+  assert.match(checkPlatform({ WAYLAND_DISPLAY: "wayland-0" }, "linux", "x64").error, /Wayland/);
+  assert.match(checkPlatform({ DISPLAY: ":0", WAYLAND_DISPLAY: "wayland-0" }, "linux", "x64").warning, /Wayland/);
+});

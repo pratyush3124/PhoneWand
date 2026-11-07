@@ -8,14 +8,42 @@ import { ROOT, IS_PACKAGED } from "./resources.js";
 // Resolve native packages from ROOT/node_modules (works inside the packaged app too).
 const require = createRequire(path.join(ROOT, "package.json"));
 
+// Problems we can spot before loading the native library, which can crash
+// instead of throwing (libX11 aborts without a display). Returns { error } or { warning }.
+export function checkPlatform(env = process.env, platform = process.platform, arch = process.arch) {
+  if (platform === "linux") {
+    if (arch !== "x64") return { error: `Mouse control on Linux needs an x64 PC (this is ${arch}).` };
+    if (!env.DISPLAY) {
+      return {
+        error: env.WAYLAND_DISPLAY
+          ? "This is a Wayland session without X11 support, and Wayland blocks apps from moving the mouse.\nLog out, pick \"GNOME on Xorg\" (or your desktop's X11 session) on the login screen, and start this again."
+          : "No X11 display found. Run this from a terminal inside your desktop session (DISPLAY isn't set).",
+      };
+    }
+    if (env.XDG_SESSION_TYPE === "wayland" || env.WAYLAND_DISPLAY) {
+      return { warning: "This is a Wayland session: the cursor only moves over X11 (XWayland) windows, if at all.\nFor full control, log out and pick \"GNOME on Xorg\" (or your desktop's X11 session) on the login screen." };
+    }
+  }
+  return {};
+}
+
 export function loadMouse() {
   const pkg = { win32: "libnut-win32", darwin: "libnut-darwin", linux: "libnut-linux" }[process.platform];
   if (!pkg) throw new Error(`Mouse control isn't supported on ${process.platform}.`);
+  const { error } = checkPlatform();
+  if (error) throw new Error(error);
   let lib;
   try {
-    lib = require(`@nut-tree-fork/${pkg}`);
+    // On macOS, load the native module itself: the package's wrapper re-asks for
+    // Accessibility permission and logs a warning on every call until it's granted.
+    lib = process.platform === "darwin"
+      ? require(path.join(path.dirname(require.resolve(`@nut-tree-fork/${pkg}/package.json`)), "build", "Release", "libnut.node"))
+      : require(`@nut-tree-fork/${pkg}`);
   } catch (e) {
-    throw new Error(`Couldn't load the mouse library (@nut-tree-fork/${pkg}). ${IS_PACKAGED ? "Re-download the app; the resources folder may be incomplete." : 'Run "npm install" and try again.'}\n${e.message}`);
+    const hint = process.platform === "linux" && /libX(tst|11)/.test(e.message)
+      ? "Install the X11 test library and try again: sudo apt install libxtst6 (Fedora: sudo dnf install libXtst)."
+      : IS_PACKAGED ? "Re-download the app; the resources folder may be incomplete." : 'Run "npm install" and try again.';
+    throw new Error(`Couldn't load the mouse library (@nut-tree-fork/${pkg}). ${hint}\n${e.message}`);
   }
   lib.setMouseDelay(0);
   lib.setKeyboardDelay(0);
@@ -47,7 +75,8 @@ export function loadMouse() {
     return chain;
   }
 
-  const MOD_NAMES = { ctrl: "control", alt: "alt", shift: "shift", meta: "command" };
+  // On macOS the phone's Ctrl acts as Command, so Ctrl+C copies like the user expects.
+  const MOD_NAMES = { ctrl: process.platform === "darwin" ? "command" : "control", alt: "alt", shift: "shift", meta: "command" };
   return {
     lib,
     close: () => unicode?.close(),
@@ -59,6 +88,18 @@ export function loadMouse() {
       type,
       key: (name, mods) => enqueue(() => lib.keyTap(name, mods.map((m) => MOD_NAMES[m]))),
     },
+  };
+}
+
+// macOS only moves the mouse for apps with Accessibility permission (granted to the
+// terminal the app runs in). Returns null elsewhere, or when the check isn't available.
+export function macAccessibility() {
+  if (process.platform !== "darwin") return null;
+  let perms;
+  try { perms = require("@nut-tree-fork/node-mac-permissions"); } catch { return null; }
+  return {
+    granted: () => perms.getAuthStatus("accessibility") === "authorized",
+    ask: () => perms.askForAccessibilityAccess(),
   };
 }
 

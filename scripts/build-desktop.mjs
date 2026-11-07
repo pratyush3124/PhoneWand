@@ -16,6 +16,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const OS = { win32: "windows", darwin: "macos", linux: "linux" }[process.platform];
 if (!OS) throw new Error(`Can't package for ${process.platform}`);
+// The Linux mouse library only ships an x64 binary (macOS's is universal, Windows has x64).
+if (process.platform === "linux" && process.arch !== "x64") throw new Error(`The Linux mouse library is x64 only, so a ${process.arch} build wouldn't work`);
 const name = `phonewand-${OS}-${process.arch}`;
 const dist = path.join(root, "dist");
 const work = path.join(dist, "build");
@@ -66,19 +68,39 @@ if (process.platform !== "win32") fs.chmodSync(exe, 0o755);
 step("Copying resources");
 const res = path.join(out, "resources");
 const copy = (rel) => fs.cpSync(path.join(root, rel), path.join(res, rel), { recursive: true });
+// A package plus everything it needs at runtime (installed optional deps too,
+// e.g. node-mac-permissions for libnut on macOS).
+const copied = new Set();
+function copyModule(name) {
+  const dir = path.join("node_modules", name);
+  if (copied.has(name) || !fs.existsSync(path.join(root, dir))) return;
+  copied.add(name);
+  copy(dir);
+  const { dependencies = {}, optionalDependencies = {} } = JSON.parse(fs.readFileSync(path.join(root, dir, "package.json"), "utf8"));
+  Object.keys({ ...dependencies, ...optionalDependencies }).forEach(copyModule);
+}
 copy("public");
 copy("node_modules/qrcode-generator/dist/qrcode.mjs");
 copy("node_modules/qrcode-generator/package.json");
-copy(`node_modules/@nut-tree-fork/libnut-${process.platform}`);
-copy("node_modules/bindings");
-copy("node_modules/file-uri-to-path");
+copyModule(`@nut-tree-fork/libnut-${process.platform}`);
+console.log(`  native modules: ${[...copied].join(", ")}`);
 if (process.platform === "win32") copy("desktop/win-unicode.ps1");
 
-const start = process.platform === "win32" ? `Double-click "${exeName}".` : `Run ./${exeName} in a terminal (or double-click it).`;
+const start = {
+  win32: `Double-click "${exeName}".`,
+  darwin: `Double-click "${exeName}" (it opens in Terminal), or run ./${exeName} in a terminal.`,
+  linux: `Run ./${exeName} in a terminal (or double-click it: it opens a terminal window).`,
+}[process.platform];
 const permissions = {
   win32: "Windows may warn that the app is from an unknown publisher (it isn't code-signed): choose More info > Run anyway.\nIt can't click inside apps running as administrator unless it runs as administrator too.",
-  darwin: "First run: right-click the app > Open (it isn't notarized). Then allow your terminal under\nSystem Settings > Privacy & Security > Accessibility, so it can move the mouse.",
-  linux: "Needs an X11 session (Wayland blocks synthetic mouse input).",
+  darwin: `First run: the app isn't notarized, so macOS blocks it. Either double-click it once, then
+System Settings > Privacy & Security > "Open Anyway", or run this once in Terminal from this folder:
+  xattr -dr com.apple.quarantine .
+Then switch on Terminal under System Settings > Privacy & Security > Accessibility, so it can
+move the mouse (the app asks and waits for it). Ctrl on the phone keyboard acts as Command.`,
+  linux: `Needs an X11 session: Wayland blocks apps from moving the mouse, so on Ubuntu/Fedora pick
+"GNOME on Xorg" on the login screen. x64 only. If it says libXtst is missing:
+  sudo apt install libxtst6        (Fedora: sudo dnf install libXtst)`,
 }[process.platform];
 fs.writeFileSync(path.join(out, "README.txt"), `PhoneWand ${pkg.version}: your phone is the mouse
 =====================================================
@@ -93,7 +115,8 @@ Phones only share motion sensors over HTTPS, so the app opens a free Cloudflare
 tunnel. Install cloudflared once for that:
   Windows: winget install --id Cloudflare.cloudflared
   macOS:   brew install cloudflared
-  Linux:   https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
+  Linux:   https://pkg.cloudflare.com (apt/dnf), or download the cloudflared-linux-amd64
+           binary from https://github.com/cloudflare/cloudflared/releases
 (or put the cloudflared binary next to this file).
 
 Keys: c = calibrate, p = pause/resume, Esc = cancel calibration, q = quit
@@ -111,11 +134,16 @@ if (process.platform === "linux") {
   archive = path.join(downloads, `${name}.tar.gz`);
   fs.rmSync(archive, { force: true });
   run("tar", ["-czf", archive, name], { cwd: dist });
+} else if (process.platform === "darwin") {
+  // ditto keeps the executable bit and code signature, the way Finder's Archive Utility expects
+  archive = path.join(downloads, `${name}.zip`);
+  fs.rmSync(archive, { force: true });
+  run("ditto", ["-c", "-k", "--keepParent", name, archive], { cwd: dist });
 } else {
   archive = path.join(downloads, `${name}.zip`);
   fs.rmSync(archive, { force: true });
-  // Windows' own bsdtar (not Git Bash's GNU tar) and macOS tar both write zips with -a
-  const tar = process.platform === "win32" ? path.join(process.env.SystemRoot || "C:\\Windows", "System32", "tar.exe") : "tar";
+  // Windows' own bsdtar (not Git Bash's GNU tar) writes zips with -a
+  const tar = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "tar.exe");
   run(tar, ["-a", "-c", "-f", archive, name], { cwd: dist });
 }
 fs.rmSync(work, { recursive: true, force: true });
