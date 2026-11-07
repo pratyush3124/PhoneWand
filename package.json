@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "node test.js",
-    "mouse": "node desktop/remote-mouse.js"
+    "mouse": "node desktop/remote-mouse.js",
+    "build:desktop": "node scripts/build-desktop.mjs"
   },
   "dependencies": {
     "qrcode-generator": "^2.0.4",
@@ -17,5 +18,13 @@
     "@nut-tree-fork/libnut-darwin": "^2.7.5",
     "@nut-tree-fork/libnut-linux": "^2.7.5",
     "@nut-tree-fork/libnut-win32": "^2.7.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.10",
+    "postject": "^1.0.0-alpha.6"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -54,7 +54,9 @@ const room = () => "T" + Math.random().toString(36).slice(2, 10);
 // ---------- static files ----------
 test("serves app, phone page, scripts and QR library", async () => {
   for (const [p, type, text] of [
-    ["/", "text/html", "Mobile Remote Demo"],
+    ["/", "text/html", "Point your phone"],
+    ["/yesno", "text/html", "Mobile Remote Demo"],
+    ["/healthz", "text/plain", "ok"],
     ["/phone", "text/html", "Phone Remote"],
     ["/remote-client.js", "text/javascript", "connectRemote"],
     ["/tilt.js", "text/javascript", "createTiltClassifier"],
@@ -67,6 +69,15 @@ test("serves app, phone page, scripts and QR library", async () => {
     assert.equal(res.status, 200, p);
     assert.match(res.headers.get("content-type"), new RegExp(type), p);
     assert.match(await res.text(), new RegExp(text), p);
+  }
+});
+
+test("lists downloads and refuses odd download names", async () => {
+  const res = await fetch(HTTP + "/downloads/");
+  assert.equal(res.status, 200);
+  assert.ok(Array.isArray((await res.json()).files));
+  for (const p of ["/downloads/..%2fserver.js", "/downloads/server.js", "/downloads/nope.zip"]) {
+    assert.equal((await fetch(HTTP + p)).status, 404, p);
   }
 });
 

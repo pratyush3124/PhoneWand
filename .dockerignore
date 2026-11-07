@@ -1,0 +1,9 @@
+node_modules
+dist
+.git
+.github
+.claude
+desktop
+scripts
+test.js
+*.md

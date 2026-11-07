@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mobile Remote</title>
+  <meta name="description" content="Turn your phone into a Wii-style pointer for your laptop. Aim, tap to click, swipe to scroll, type from the phone. Nothing to install on the phone.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='9' y='3' width='14' height='26' rx='3.5' fill='%233867d6'/%3E%3Ccircle cx='16' cy='9' r='2.5' fill='%23f5a524'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --bg: #f6f7f9; --card: #fff; --text: #171a20; --muted: #5d6573; --line: #e1e4ea; --soft: #eceff4;
+      --accent: #3867d6; --accent-text: #fff; --ring: #f5a524; --good: #1f8a4c;
+      --code-bg: #12151b; --code-text: #e3e6ec;
+      --shadow: 0 1px 2px rgb(16 24 40 / .06), 0 8px 24px rgb(16 24 40 / .06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #111318; --card: #1a1d24; --text: #e8eaee; --muted: #9aa1ad; --line: #2b2f38; --soft: #22262e;
+        --accent: #6c8ff0; --accent-text: #0f1115; --code-bg: #0b0d11; --shadow: 0 1px 2px rgb(0 0 0 / .3); }
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    a { color: var(--accent); }
+    .wrap { width: min(1080px, 100% - 32px); margin: 0 auto; }
+
+    /* nav */
+    nav { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+    nav .wrap { display: flex; align-items: center; gap: 20px; height: 58px; }
+    .brand { display: flex; align-items: center; gap: 9px; font-weight: 750; letter-spacing: -.01em; color: var(--text); text-decoration: none; }
+    .brand svg { width: 22px; height: 22px; }
+    nav .links { margin-left: auto; display: flex; gap: 20px; }
+    nav .links a { color: var(--muted); text-decoration: none; font-size: .93rem; font-weight: 550; }
+    nav .links a:hover { color: var(--text); }
+
+    /* buttons */
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 11px; font-weight: 650; text-decoration: none;
+      border: 1px solid var(--line); background: var(--card); color: var(--text); transition: transform .1s, box-shadow .15s; }
+    .btn:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+    .btn svg { width: 18px; height: 18px; flex: none; }
+    .btn small { font-weight: 500; opacity: .8; }
+
+    /* hero */
+    .hero { padding: 72px 0 56px; }
+    .hero .wrap { display: grid; grid-template-columns: 1.05fr .95fr; gap: 48px; align-items: center; }
+    .eyebrow { display: inline-block; font-size: .8rem; font-weight: 650; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+      padding: 4px 10px; border-radius: 999px; margin-bottom: 18px; }
+    h1 { font-size: clamp(2.3rem, 5.4vw, 3.6rem); line-height: 1.05; letter-spacing: -.035em; margin: 0 0 18px; font-weight: 800; }
+    h1 em { font-style: normal; color: var(--accent); }
+    .lede { font-size: 1.15rem; color: var(--muted); margin: 0 0 28px; max-width: 34em; }
+    .ctas { display: flex; flex-wrap: wrap; gap: 12px; }
+    .fine { margin-top: 14px; font-size: .85rem; color: var(--muted); }
+
+    /* hero illustration */
+    .scene { width: 100%; height: auto; display: block; overflow: visible; }
+    .scene .screen { fill: var(--card); stroke: var(--line); }
+    .scene .bezel { fill: var(--text); }
+    .scene .base { fill: var(--soft); stroke: var(--line); }
+    .scene .tile { fill: var(--soft); }
+    .scene .tile.hot { fill: var(--accent); animation: hot 6s infinite; }
+    .scene .phone { fill: var(--text); }
+    .scene .phone-screen { fill: var(--card); }
+    .scene .pad { fill: var(--soft); }
+    .scene .beam { fill: url(#beam); }
+    .scene .cursor { fill: color-mix(in srgb, var(--ring) 25%, transparent); stroke: var(--ring); stroke-width: 3; }
+    .scene .tap { fill: none; stroke: var(--ring); stroke-width: 2; opacity: 0; animation: tap 6s infinite; transform-box: fill-box; transform-origin: center; }
+    .scene .aim { animation: aim 6s ease-in-out infinite; transform-origin: 80px 350px; }
+    @keyframes aim { 0%, 100% { transform: rotate(-13deg); } 40%, 60% { transform: rotate(0); } }
+    @keyframes tap { 0%, 48% { opacity: 0; transform: scale(.4); } 50% { opacity: 1; } 62%, 100% { opacity: 0; transform: scale(2.4); } }
+    @keyframes hot { 0%, 49% { fill: var(--soft); } 50%, 90% { fill: var(--accent); } 100% { fill: var(--soft); } }
+    @media (prefers-reduced-motion: reduce) { .scene * { animation: none !important; } }
+
+    /* sections */
+    section { padding: 64px 0; }
+    section + section { border-top: 1px solid var(--line); }
+    h2 { font-size: clamp(1.6rem, 3.2vw, 2.2rem); letter-spacing: -.025em; line-height: 1.15; margin: 0 0 10px; }
+    .sub { color: var(--muted); margin: 0 0 36px; max-width: 40em; font-size: 1.05rem; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 24px; box-shadow: var(--shadow); }
+
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; counter-reset: step; }
+    .steps .card { position: relative; padding-top: 58px; }
+    .steps .card::before { counter-increment: step; content: counter(step); position: absolute; top: 20px; left: 24px; width: 28px; height: 28px; border-radius: 50%;
+      background: var(--accent); color: var(--accent-text); display: grid; place-items: center; font-weight: 750; font-size: .9rem; }
+    .card h3 { margin: 0 0 6px; font-size: 1.1rem; letter-spacing: -.01em; }
+    .card p { margin: 0; color: var(--muted); }
+
+    .ways { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .ways .card { display: flex; flex-direction: column; gap: 14px; }
+    .tag { align-self: flex-start; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+    .ways ul { margin: 0; padding-left: 20px; color: var(--muted); }
+    .ways ul li { margin: 3px 0; }
+    .ways .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: auto; padding-top: 6px; }
+    .dl-list { display: grid; gap: 8px; }
+    .dl { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; text-decoration: none; color: var(--text); background: var(--bg); }
+    .dl:hover { border-color: var(--accent); }
+    .dl.mine { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+    .dl svg { width: 22px; height: 22px; color: var(--muted); flex: none; }
+    .dl .os { font-weight: 650; }
+    .dl .meta { margin-left: auto; color: var(--muted); font-size: .85rem; white-space: nowrap; }
+    .note { font-size: .88rem; color: var(--muted); background: var(--soft); border-radius: 10px; padding: 10px 12px; }
+    .note code, p code, li code { font: .88em ui-monospace, SFMono-Regular, Consolas, monospace; background: var(--soft); padding: 1px 5px; border-radius: 5px; }
+    .note code { background: var(--card); }
+
+    .gestures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+    .g { background: var(--card); padding: 22px; display: flex; gap: 14px; align-items: flex-start; }
+    .g svg { width: 30px; height: 30px; flex: none; color: var(--accent); }
+    .g b { display: block; margin-bottom: 2px; }
+    .g span { color: var(--muted); font-size: .93rem; }
+
+    .dev { display: grid; grid-template-columns: .8fr 1.2fr; gap: 40px; align-items: start; }
+    pre { margin: 0; background: var(--code-bg); color: var(--code-text); border-radius: 14px; padding: 20px; overflow-x: auto; font: .84rem/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    pre .c { color: #7f8899; } pre .k { color: #c59cff; } pre .s { color: #8fd18f; } pre .f { color: #7fb3ff; }
+
+    footer { padding: 32px 0 48px; color: var(--muted); font-size: .88rem; border-top: 1px solid var(--line); }
+    footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: space-between; }
+
+    @media (max-width: 860px) {
+      .hero { padding-top: 40px; }
+      .hero .wrap, .ways, .dev { grid-template-columns: 1fr; }
+      .scene { max-width: 460px; margin: 0 auto; }
+      .steps, .gestures { grid-template-columns: 1fr; }
+      nav .links a.opt { display: none; }
+    }
+    @media (min-width: 561px) and (max-width: 860px) { .gestures { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="wrap">
+      <a class="brand" href="/">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="9" y="3" width="14" height="26" rx="3.5" fill="var(--accent)"/><circle cx="16" cy="9" r="2.5" fill="var(--ring)"/></svg>
+        Mobile Remote
+      </a>
+      <div class="links">
+        <a class="opt" href="#how">How it works</a>
+        <a href="#get">Get it</a>
+        <a class="opt" href="#developers">Developers</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="wrap">
+      <div>
+        <span class="eyebrow">No app to install on the phone</span>
+        <h1>Point your phone.<br><em>Click</em> the screen.</h1>
+        <p class="lede">Mobile Remote turns any phone into a Wii-style pointer for your laptop. Aim the top edge at the screen and the cursor follows. Tap to click, swipe to scroll, type on the phone's keyboard.</p>
+        <div class="ctas">
+          <a class="btn primary" id="heroDownload" href="#get">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+            <span id="heroDownloadText">Get the desktop app</span>
+          </a>
+          <a class="btn" href="/play">Try it in the browser</a>
+        </div>
+        <p class="fine" id="heroFine">For Windows, macOS and Linux · works with any phone browser</p>
+      </div>
+
+      <svg class="scene" viewBox="0 0 520 400" role="img" aria-label="A phone aimed at a laptop screen, with a cursor where it points">
+        <defs>
+          <linearGradient id="beam" x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0" stop-color="var(--ring)" stop-opacity=".0"/>
+            <stop offset="1" stop-color="var(--ring)" stop-opacity=".35"/>
+          </linearGradient>
+        </defs>
+        <!-- laptop -->
+        <rect class="bezel" x="150" y="40" width="350" height="230" rx="14"/>
+        <rect class="screen" x="162" y="52" width="326" height="206" rx="6"/>
+        <rect class="tile" x="182" y="72" width="88" height="54" rx="8"/>
+        <rect class="tile" x="281" y="72" width="88" height="54" rx="8"/>
+        <rect class="tile" x="380" y="72" width="88" height="54" rx="8"/>
+        <rect class="tile" x="182" y="137" width="88" height="54" rx="8"/>
+        <rect class="tile hot" x="281" y="137" width="88" height="54" rx="8"/>
+        <rect class="tile" x="380" y="137" width="88" height="54" rx="8"/>
+        <rect class="tile" x="182" y="202" width="286" height="36" rx="8"/>
+        <path class="base" d="M128 270h394l-16 22a10 10 0 0 1-8 4H152a10 10 0 0 1-8-4z"/>
+        <!-- phone, beam and cursor turn together around the hand -->
+        <g class="aim">
+          <path class="beam" d="M127 314 L314 156 L336 172 Z"/>
+          <circle class="cursor" cx="325" cy="164" r="13"/>
+          <circle class="tap" cx="325" cy="164" r="13"/>
+          <g transform="rotate(52.8 80 350)">
+            <rect class="phone" x="50" y="291" width="60" height="118" rx="12"/>
+            <rect class="phone-screen" x="55" y="299" width="50" height="102" rx="7"/>
+            <rect x="60" y="305" width="40" height="12" rx="4" fill="var(--accent)"/>
+            <rect class="pad" x="60" y="347" width="40" height="48" rx="5"/>
+          </g>
+        </g>
+      </svg>
+    </div>
+  </header>
+
+  <section id="how">
+    <div class="wrap">
+      <h2>Set up in under a minute</h2>
+      <p class="sub">The phone only needs its web browser. Your laptop runs a small helper that pairs with it over a QR code.</p>
+      <div class="steps">
+        <div class="card"><h3>Run the app</h3><p>Start Mobile Remote on your laptop. It opens a secure link for your phone and shows a QR code.</p></div>
+        <div class="card"><h3>Scan the code</h3><p>Point your phone's camera at the QR code and tap <b>Start motion</b>. On iPhone, allow motion access.</p></div>
+        <div class="card"><h3>Point at 4 corners</h3><p>Aim the phone's top edge at each corner of the screen and tap. After that, the cursor goes where you point.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="get">
+    <div class="wrap">
+      <h2>Two ways to use it</h2>
+      <p class="sub">Use the desktop app to control your whole computer, or try the browser demos without installing anything.</p>
+      <div class="ways">
+        <div class="card">
+          <span class="tag">Desktop app</span>
+          <h3>Control your whole computer</h3>
+          <ul>
+            <li>Moves your real mouse, so it works in any app and any browser tab</li>
+            <li>Scroll with two fingers, type with the phone keyboard (emoji and autocorrect too)</li>
+            <li>Starts the relay and the secure tunnel for you, then shows a QR code</li>
+          </ul>
+          <div class="dl-list" id="downloads">
+            <div class="note">Looking for downloads…</div>
+          </div>
+          <div class="note">The app uses a free Cloudflare tunnel to give your phone an HTTPS link. Install it once:
+            <code>winget install --id Cloudflare.cloudflared</code> on Windows or <code>brew install cloudflared</code> on macOS.</div>
+        </div>
+        <div class="card">
+          <span class="tag">In the browser</span>
+          <h3>Try the demos</h3>
+          <ul>
+            <li><b>Pointer Playground</b>: light up buttons, hit targets, type on an on-screen keyboard, or paint, all by pointing</li>
+            <li><b>Yes / No</b>: point left or right of the screen and tap to choose</li>
+          </ul>
+          <div class="note" id="httpsNote">Phones only share motion sensors with HTTPS pages, so open this site through its <code>https://</code> address on your laptop. The QR code on each demo then points at the right place.</div>
+          <div class="actions">
+            <a class="btn primary" href="/play">Open the Playground</a>
+            <a class="btn" href="/yesno">Yes / No demo</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Everything from one hand</h2>
+      <p class="sub">The top half of the phone has the controls. The bottom half is a touchpad.</p>
+      <div class="gestures">
+        <div class="g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg><div><b>Point</b><span>Aim the top edge and the cursor follows.</span></div></div>
+        <div class="g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="9" opacity=".45"/></svg><div><b>Tap</b><span>Click. Uses where you pointed just before your finger landed.</span></div></div>
+        <div class="g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M15 8l4 4-4 4M9 8l-4 4 4 4"/></svg><div><b>Drag</b><span>Nudge the cursor precisely onto small targets.</span></div></div>
+        <div class="g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v16M15 4v16M9 4l-3 3M15 4l3 3"/></svg><div><b>Two fingers</b><span>Scroll, just like on the phone itself.</span></div></div>
+        <div class="g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><div><b>Hold</b><span>Recenter when the gyro drifts. Aim at the middle first.</span></div></div>
+        <div class="g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg><div><b>Keyboard</b><span>Type into whatever has focus. Ctrl, Alt and arrows included.</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="developers">
+    <div class="wrap dev">
+      <div>
+        <h2>Add it to your own web app</h2>
+        <p class="sub" style="margin-bottom:16px">Load <code>remote-client.js</code>, show a QR code with a room code, and react to the phone. <code>pointer.js</code> turns pointing into screen coordinates after a 4-corner calibration.</p>
+        <p class="sub" style="margin-bottom:0">The relay is one small Node server: run <code>npm start</code>, or deploy the included Dockerfile anywhere with HTTPS.</p>
+      </div>
+<pre><span class="k">import</span> { connectRemote, makeRoomCode } <span class="k">from</span> <span class="s">"/remote-client.js"</span>;
+
+<span class="k">const</span> room = makeRoomCode();
+<span class="c">// show `${origin}/phone?room=${room}` as a QR code</span>
+
+<span class="f">connectRemote</span>({
+  room,
+  <span class="f">onPoint</span>: ({ v }) =&gt; { <span class="c">/* where the phone points */</span> },
+  <span class="f">onClick</span>: () =&gt; { <span class="c">/* the touchpad was tapped */</span> },
+  <span class="f">onStatus</span>: ({ phone }) =&gt; { <span class="c">/* paired or not */</span> },
+});</pre>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <span>Mobile Remote</span>
+      <span><a href="/play">Playground</a> · <a href="/yesno">Yes / No</a> · <a href="/phone">Phone page</a></span>
+    </div>
+  </footer>
+
+  <script>
+    const OS_NAMES = { windows: "Windows", macos: "macOS", linux: "Linux" };
+    const ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>';
+
+    function myOs() {
+      const p = (navigator.userAgentData?.platform || navigator.platform || navigator.userAgent).toLowerCase();
+      if (p.includes("win")) return "windows";
+      if (p.includes("mac")) return "macos";
+      if (p.includes("linux") && !/android/.test(navigator.userAgent.toLowerCase())) return "linux";
+      return null;
+    }
+    const mb = (n) => (n / 1e6).toFixed(0) + " MB";
+    const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+    async function loadDownloads() {
+      const list = document.getElementById("downloads");
+      let files = [];
+      try { files = (await (await fetch("/downloads/")).json()).files || []; } catch {}
+      const builds = files.map((f) => {
+        const m = f.name.match(/^mobile-remote-(windows|macos|linux)-([a-z0-9]+)\./);
+        return m && { ...f, os: m[1], arch: m[2] };
+      }).filter(Boolean);
+      const os = myOs();
+      builds.sort((a, b) => (b.os === os) - (a.os === os));
+
+      if (!builds.length) {
+        list.innerHTML = '<div class="note">No builds on this server yet. Build one with <code>npm run build:desktop</code>, or run it from source with <code>npm install</code> then <code>npm run mouse</code>.</div>';
+        return;
+      }
+      list.innerHTML = builds.map((b) =>
+        `<a class="dl${b.os === os ? " mine" : ""}" href="/downloads/${encodeURIComponent(b.name)}" download>${ICON}` +
+        `<span><span class="os">${OS_NAMES[b.os]}</span> <small>${esc(b.arch)}</small></span>` +
+        `<span class="meta">${b.name.endsWith(".zip") ? "zip" : "tar.gz"} · ${mb(b.size)}</span></a>`).join("");
+
+      const mine = builds.find((b) => b.os === os);
+      if (mine) {
+        const btn = document.getElementById("heroDownload");
+        btn.href = "/downloads/" + encodeURIComponent(mine.name);
+        btn.setAttribute("download", "");
+        document.getElementById("heroDownloadText").textContent = `Download for ${OS_NAMES[mine.os]}`;
+        const others = [...new Set(builds.filter((b) => b.os !== mine.os).map((b) => OS_NAMES[b.os]))];
+        document.getElementById("heroFine").textContent =
+          [`${mb(mine.size)} zip`, others.length && `also for ${others.join(" and ")}`, "works with any phone browser"].filter(Boolean).join(" · ");
+      }
+    }
+    loadDownloads();
+
+    if (location.protocol === "https:") {
+      document.getElementById("httpsNote").textContent = "You're on HTTPS, so the QR code on each demo works as is. Scan it with your phone.";
+    }
+  </script>
+</body>
+</html>

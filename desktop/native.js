@@ -1,10 +1,12 @@
 // Real mouse + keyboard through the prebuilt native libnut module for this OS.
 // loadMouse() returns { lib, mouse, close }, where mouse is what createDesktopController expects.
+import path from "node:path";
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { ROOT, IS_PACKAGED } from "./resources.js";
 
-const require = createRequire(import.meta.url);
+// Resolve native packages from ROOT/node_modules (works inside the packaged app too).
+const require = createRequire(path.join(ROOT, "package.json"));
 
 export function loadMouse() {
   const pkg = { win32: "libnut-win32", darwin: "libnut-darwin", linux: "libnut-linux" }[process.platform];
@@ -13,7 +15,7 @@ export function loadMouse() {
   try {
     lib = require(`@nut-tree-fork/${pkg}`);
   } catch (e) {
-    throw new Error(`Couldn't load the mouse library (@nut-tree-fork/${pkg}). Run "npm install" and try again.\n${e.message}`);
+    throw new Error(`Couldn't load the mouse library (@nut-tree-fork/${pkg}). ${IS_PACKAGED ? "Re-download the app; the resources folder may be incomplete." : 'Run "npm install" and try again.'}\n${e.message}`);
   }
   lib.setMouseDelay(0);
   lib.setKeyboardDelay(0);
@@ -62,7 +64,7 @@ export function loadMouse() {
 
 // A long-lived PowerShell process that types Unicode text (see win-unicode.ps1).
 function startWinUnicode() {
-  const script = fileURLToPath(new URL("./win-unicode.ps1", import.meta.url));
+  const script = path.join(ROOT, "desktop", "win-unicode.ps1");
   const ps = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script], {
     stdio: ["pipe", "pipe", "ignore"],
     windowsHide: true,

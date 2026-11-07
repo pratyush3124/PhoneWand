@@ -2,10 +2,11 @@
 
 Use your phone like a Wii remote for a web app on your laptop. Aim the **top edge** of the phone at the screen.
 
-Two demo pages:
+Pages:
 
+- **`/`:** landing page, with download buttons for the packaged desktop app.
 - **`/play` (Pointer Playground):** a 2D cursor follows where the phone points. Calibrate once by pointing at 4 corner dots, then try four modes: **Buttons** (light up grids from 6 to 84 buttons), **Targets** (timed target practice), **Keyboard** (type phrases on an on-screen keyboard), **Paint** (tap to put the pen down / lift it).
-- **`/` (Yes/No demo):** point left of the screen for **Yes**, right for **No**, tap to choose.
+- **`/yesno` (Yes/No demo):** point left of the screen for **Yes**, right for **No**, tap to choose.
 
 The phone screen is split in two:
 
@@ -13,7 +14,7 @@ The phone screen is split in two:
 - **Bottom half (touchpad):** **tap** = click, **drag** = move the cursor precisely (a full-width swipe moves it half the screen), **hold 0.7 s** = recenter, **two fingers** or the **right-edge strip** = scroll (scroll and keyboard are handled by the desktop helper; web pages get them as `onScroll` / `onText` / `onKey`).
 
 ```
-Phone (/phone) ──WebSocket──▶ server.js (relay) ──WebSocket──▶ Web page (/play or /)
+Phone (/phone) ──WebSocket──▶ relay.js ──WebSocket──▶ Web page (/play, /yesno) or the desktop app
                   paired by a random room code, shared through a QR code
 ```
 
@@ -68,19 +69,46 @@ On the Yes/No page, pointing about 15° left or right of where you started selec
 
 On the Yes/No page: `←` highlights Yes, `→` highlights No, `↓` clears, `Enter` clicks. In the playground everything also works with the mouse, and the Keyboard mode accepts real typing.
 
+## Desktop app (download)
+
+`npm run build:desktop` packages the desktop helper below as a single executable for the OS you run it on (Node's single-executable-application support, no Node needed on the target machine):
+
+- `dist/mobile-remote-<os>-<arch>/`: `Mobile Remote.exe` (or `mobile-remote` on macOS/Linux), a `resources/` folder (web pages, the native mouse library) and a `README.txt`
+- `downloads/mobile-remote-<os>-<arch>.zip` (`.tar.gz` on Linux): the archive the landing page offers. The web app serves everything in `downloads/` at `/downloads/<file>`, and lists it at `/downloads/`.
+
+Double-clicking the app starts its own relay, opens a Cloudflare quick tunnel when `cloudflared` is installed (on PATH, in its default install folder, or next to the app), and prints the QR code. No terminal setup needed.
+
+Build each OS on that OS. [.github/workflows/release.yml](.github/workflows/release.yml) does Windows, macOS and Linux in CI: push a tag like `v1.0.0` to attach the archives to a GitHub release, or run the workflow by hand to get them as artifacts. Copy them into `downloads/` on the server to offer them on the landing page.
+
+The builds aren't code-signed: Windows SmartScreen shows "unknown publisher" (More info → Run anyway), and on macOS the first launch needs right-click → Open.
+
+## Deploy the web app
+
+Phones need HTTPS, so hosting the web app on any HTTPS platform removes the tunnel step for the browser demos:
+
+```bash
+docker build -t mobile-remote .
+```
+
+```bash
+docker run -p 8080:8080 mobile-remote
+```
+
+The image has the landing page, demos and relay (no desktop parts) and includes whatever is in `downloads/` at build time; or set `DOWNLOADS_DIR` to a mounted folder. `/healthz` returns `ok`. The desktop app can then use it instead of its own relay and tunnel: `"Mobile Remote.exe" --server https://your-host`.
+
 ## Control your whole desktop (any browser tab)
 
 The demo pages only react to the phone because they load `remote-client.js`. To use the phone as a mouse everywhere (YouTube, Gmail, the tab bar, other apps), run the desktop helper. It joins a room like a web page would, but it moves and clicks your **real mouse pointer**.
 
-1. Start the relay and a tunnel as above (`npm start`, then `cloudflared tunnel --url http://localhost:8080`).
-2. In another terminal:
+1. Run it (or double-click the packaged app):
 
    ```bash
-   npm run mouse -- --public https://<your-tunnel>.trycloudflare.com
+   npm run mouse
    ```
 
-3. Scan the QR code it prints, then tap **Start motion** on the phone.
-4. Calibrate: the helper puts the mouse pointer in each corner of the screen, wiggling it slightly. Aim the phone's top edge at it and tap the touchpad, 4 times.
+   It starts a relay on port 8080 (or reuses one already running there, like `npm start`), opens a `cloudflared` quick tunnel if cloudflared is installed, and prints a QR code. Without cloudflared, start your own tunnel and pass `--public https://<your-tunnel>`.
+2. Scan the QR code it prints, then tap **Start motion** on the phone.
+3. Calibrate: the helper puts the mouse pointer in each corner of the screen, wiggling it slightly. Aim the phone's top edge at it and tap the touchpad, 4 times.
 
 Then the pointer follows the phone. **Tap** = left click, **drag** = fine move, **hold** = recenter (aim at the middle of the screen first), **Calibrate** on the phone = redo the corners.
 
@@ -89,7 +117,7 @@ Then the pointer follows the phone. **Tap** = left click, **drag** = fine move, 
 
 - Touch the real mouse and the phone backs off for 1.5 s, so they don't fight. While it's backed off, a phone tap clicks wherever the mouse pointer is.
 - Keys in the helper's terminal: `c` calibrate, `p` pause/resume, `Esc` cancel calibration, `q` quit.
-- Options: `--server URL` (relay to connect to, default `http://localhost:8080`), `--room CODE` (reuse a room), `--smooth light|medium|strong`.
+- Options: `--server URL` (use this relay instead of starting one, e.g. your hosted web app), `--public URL` (https URL for the QR code; skips the tunnel), `--port N` (built-in relay's port, default 8080), `--no-tunnel`, `--room CODE` (reuse a room), `--smooth light|medium|strong`.
 - It uses the primary monitor only.
 - The mouse library (`@nut-tree-fork/libnut-*`) is an optional native dependency with prebuilt binaries for Windows, macOS and Linux (X11). On macOS, give your terminal Accessibility permission (System Settings → Privacy & Security → Accessibility). On Windows, it can't click inside windows running as administrator unless the helper's terminal is also running as administrator.
 

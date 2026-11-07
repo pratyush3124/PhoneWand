@@ -1,44 +1,68 @@
 #!/usr/bin/env node
-// Desktop helper: the phone remote moves and clicks your real mouse, so it works
+// Desktop app: the phone remote moves and clicks your real mouse, so it works
 // in any browser tab (or any app), not just pages that load remote-client.js.
 //
-//   npm run mouse -- --public https://your-tunnel.trycloudflare.com
+//   npm run mouse                 (or double-click the packaged Mobile Remote app)
+//
+// With no options it runs everything itself: a relay on localhost (reusing one that's
+// already running there), plus a free Cloudflare quick tunnel when `cloudflared` is
+// installed, so the phone gets the HTTPS link it needs. Then it prints a QR code.
 //
 // Options:
-//   --public URL   public https URL of the relay (put in the QR code for the phone)
-//   --server URL   relay this helper connects to (default http://localhost:$PORT or 8080)
+//   --server URL   use this relay instead of starting one (e.g. your hosted web app)
+//   --public URL   public https URL of the relay, for the QR code (skips the tunnel)
+//   --port N       port for the built-in relay (default $PORT or 8080)
+//   --no-tunnel    don't start cloudflared
 //   --room CODE    room code to use (default: a new random one)
 //   --smooth light|medium|strong   cursor smoothing (default medium)
 //
 // Keys while running: c = calibrate, p = pause/resume, Esc = cancel calibration, q = quit.
+import fs from "node:fs";
+import path from "node:path";
+import { spawn } from "node:child_process";
 import { parseArgs } from "node:util";
 import qrcode from "qrcode-generator";
 import { connectRemote, makeRoomCode } from "../public/remote-client.js";
+import { createRelay } from "../relay.js";
 import { createDesktopController } from "./controller.js";
 import { loadMouse } from "./native.js";
+import { ROOT, IS_PACKAGED } from "./resources.js";
 
 const ROOM_RE = /^[A-Za-z0-9_-]{4,64}$/;
+const USAGE = `Usage: ${IS_PACKAGED ? "mobile-remote" : "npm run mouse --"} [--server URL] [--public URL] [--port N] [--no-tunnel] [--room CODE] [--smooth light|medium|strong]`;
 
-const { values: opts } = parseArgs({
-  options: {
-    public: { type: "string" },
-    server: { type: "string", default: `http://localhost:${process.env.PORT || 8080}` },
-    room: { type: "string" },
-    smooth: { type: "string", default: "medium" },
-    help: { type: "boolean", short: "h" },
-  },
-});
+const stamp = () => new Date().toLocaleTimeString();
+const log = (text) => console.log(`[${stamp()}] ${text}`);
+const cleanups = [];
 
-if (opts.help) {
-  console.log("Usage: npm run mouse -- --public https://<tunnel-url> [--server URL] [--room CODE] [--smooth light|medium|strong]");
-  process.exit(0);
-}
-
+// In the packaged app the console window closes as soon as we exit, so keep it
+// open long enough to read the error.
 function fail(msg) {
-  console.error(msg);
-  process.exit(1);
+  console.error("\n" + msg);
+  cleanups.forEach((f) => f());
+  if (IS_PACKAGED && process.stdin.isTTY) {
+    console.error("\nPress Enter to close.");
+    process.stdin.resume();
+    process.stdin.once("data", () => process.exit(1));
+  } else process.exit(1);
 }
 
+let opts;
+try {
+  ({ values: opts } = parseArgs({
+    options: {
+      public: { type: "string" },
+      server: { type: "string" },
+      port: { type: "string", default: String(process.env.PORT || 8080) },
+      "no-tunnel": { type: "boolean" },
+      room: { type: "string" },
+      smooth: { type: "string", default: "medium" },
+      help: { type: "boolean", short: "h" },
+    },
+  }));
+} catch (e) {
+  fail(`${e.message}\n${USAGE}`);
+}
 
 function printQr(text) {
   const q = qrcode(0, "L");
@@ -60,82 +84,197 @@ function printQr(text) {
   console.log(lines.join("\n"));
 }
 
-// ---------- setup ----------
-const room = opts.room ?? makeRoomCode();
-if (!ROOM_RE.test(room)) fail("Room codes must be 4-64 letters, digits, - or _.");
-
-let publicOrigin = null;
-if (opts.public) {
-  let u;
-  try { u = new URL(opts.public); } catch { fail(`--public: "${opts.public}" isn't a URL.`); }
-  if (u.protocol !== "https:") fail("--public must be an https URL: phones only give motion data on HTTPS.");
-  publicOrigin = u.origin;
-} else {
+async function isRelay(port) {
   try {
-    const u = new URL(opts.server);
-    if (u.protocol === "https:") publicOrigin = u.origin;
-  } catch { fail(`--server: "${opts.server}" isn't a URL.`); }
+    const res = await fetch(`http://localhost:${port}/remote-client.js`, { signal: AbortSignal.timeout(1500) });
+    return res.ok && (await res.text()).includes("connectRemote");
+  } catch {
+    return false;
+  }
 }
 
-let lib, mouse, closeMouse;
-try {
-  ({ lib, mouse, close: closeMouse } = loadMouse());
-} catch (e) {
-  fail(e.message);
-}
-const screen = lib.getScreenSize();
-const stamp = () => new Date().toLocaleTimeString();
-const log = (text) => console.log(`[${stamp()}] ${text}`);
-const ctl = createDesktopController({ mouse, screen, log, smoothing: opts.smooth });
-
-console.log(`\nPhone mouse: room ${room}, screen ${screen.width}x${screen.height}, relay ${opts.server}`);
-if (publicOrigin) {
-  const url = `${publicOrigin}/phone?room=${encodeURIComponent(room)}`;
-  console.log(`\nScan with your phone (or open ${url}):\n`);
-  printQr(url);
-} else {
-  console.log(
-    "\nNo public https URL given, so there's no QR code. Start a tunnel (cloudflared tunnel --url http://localhost:8080)\n" +
-      `and either rerun with --public https://<tunnel-url>, or open https://<tunnel-url>/phone?room=${room} on the phone.`,
-  );
-}
-console.log("\nKeys: c = calibrate, p = pause/resume, Esc = cancel calibration, q = quit\n");
-
-let phone = false;
-let server = null;
-const remote = connectRemote({
-  room,
-  server: opts.server,
-  ...ctl.handlers,
-  onStatus(s) {
-    if (s.server !== server) {
-      server = s.server;
-      if (server === "connected") log("Connected to the relay.");
-      else if (server === "disconnected") log(`Can't reach the relay at ${opts.server}. Is "npm start" running? Retrying...`);
-    }
-    if (s.phone !== phone) {
-      phone = s.phone;
-      log(phone ? "Phone connected. Tap Start motion on the phone." : "Phone disconnected.");
-    }
-  },
-});
-
-function quit() {
-  remote.close();
-  closeMouse?.();
-  if (process.stdin.isTTY) process.stdin.setRawMode(false);
-  console.log("Bye.");
-  process.exit(0);
-}
-
-process.on("SIGINT", quit);
-if (process.stdin.isTTY) {
-  process.stdin.setRawMode(true);
-  process.stdin.setEncoding("utf8");
-  process.stdin.on("data", (key) => {
-    if (key === "\u0003" || key === "q") quit(); // Ctrl+C in raw mode arrives as a key
-    else if (key === "c") ctl.startCalibration();
-    else if (key === "p") ctl.setPaused(!ctl.paused);
-    else if (key === "\u001b") ctl.cancelCalibration();
+// Start the built-in relay. If the port is taken by another relay (say `npm start`), use that one.
+async function startLocalRelay(port) {
+  const { server } = createRelay({ root: ROOT });
+  const listen = (p) => new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(p, () => { server.off("error", reject); resolve(server.address().port); });
   });
+  try {
+    return await listen(port);
+  } catch (e) {
+    if (e.code !== "EADDRINUSE") throw e;
+    if (await isRelay(port)) {
+      log(`Using the relay already running on port ${port}.`);
+      return port;
+    }
+    const p = await listen(0);
+    log(`Port ${port} is busy, so the relay is on port ${p}.`);
+    return p;
+  }
 }
+
+function cloudflaredCandidates() {
+  const exe = process.platform === "win32" ? "cloudflared.exe" : "cloudflared";
+  const local = [path.join(ROOT, exe), path.join(path.dirname(process.execPath), exe)];
+  if (process.platform === "win32") {
+    for (const dir of [process.env["ProgramFiles(x86)"], process.env.ProgramFiles]) {
+      if (dir) local.push(path.join(dir, "cloudflared", exe));
+    }
+  } else local.push("/opt/homebrew/bin/cloudflared", "/usr/local/bin/cloudflared");
+  return [...local.filter((f) => fs.existsSync(f)), "cloudflared"];
+}
+
+// Free Cloudflare quick tunnel: resolves to its https origin, or null if it can't start.
+async function startTunnel(port) {
+  for (const bin of cloudflaredCandidates()) {
+    const url = await new Promise((resolve) => {
+      let proc;
+      try {
+        proc = spawn(bin, ["tunnel", "--no-autoupdate", "--url", `http://localhost:${port}`], {
+          stdio: ["ignore", "pipe", "pipe"],
+          windowsHide: true,
+        });
+      } catch {
+        return resolve(null);
+      }
+      let found = false;
+      const timer = setTimeout(() => { proc.kill(); resolve(null); }, 30000);
+      const done = (v) => { clearTimeout(timer); resolve(v); };
+      proc.on("error", () => done(null)); // not installed at this path
+      proc.on("exit", () => {
+        if (found) log("The tunnel stopped. Restart the app to get a new link.");
+        else done(null);
+      });
+      const scan = (d) => {
+        const m = !found && d.toString().match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+        if (m) {
+          found = true;
+          cleanups.push(() => proc.kill());
+          done(m[0]);
+        }
+      };
+      proc.stdout.on("data", scan);
+      proc.stderr.on("data", scan);
+    });
+    if (url) {
+      // A new quick tunnel takes a few seconds before it answers.
+      const until = Date.now() + 20000;
+      while (Date.now() < until) {
+        try {
+          if ((await fetch(url + "/healthz", { signal: AbortSignal.timeout(3000) })).ok) break;
+        } catch {}
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      return url;
+    }
+  }
+  return null;
+}
+
+async function main() {
+  if (opts.help) {
+    console.log(USAGE);
+    process.exit(0);
+  }
+  console.log("\nMobile Remote: your phone is the mouse.\n");
+
+  const room = opts.room ?? makeRoomCode();
+  if (!ROOM_RE.test(room)) return fail("Room codes must be 4-64 letters, digits, - or _.");
+
+  let publicOrigin = null;
+  if (opts.public) {
+    let u;
+    try { u = new URL(opts.public); } catch { return fail(`--public: "${opts.public}" isn't a URL.`); }
+    if (u.protocol !== "https:") return fail("--public must be an https URL: phones only give motion data on HTTPS.");
+    publicOrigin = u.origin;
+  }
+
+  let serverUrl = opts.server;
+  if (serverUrl) {
+    let u;
+    try { u = new URL(serverUrl); } catch { return fail(`--server: "${serverUrl}" isn't a URL.`); }
+    if (!publicOrigin && u.protocol === "https:") publicOrigin = u.origin;
+  } else {
+    const port = Number(opts.port);
+    if (!Number.isInteger(port) || port < 0 || port > 65535) return fail(`--port: "${opts.port}" isn't a port number.`);
+    let actual;
+    try { actual = await startLocalRelay(port); } catch (e) { return fail(`Couldn't start the relay: ${e.message}`); }
+    serverUrl = `http://localhost:${actual}`;
+    if (!publicOrigin && !opts["no-tunnel"]) {
+      log("Opening a secure tunnel for the phone (cloudflared)...");
+      publicOrigin = await startTunnel(actual);
+      if (publicOrigin) log(`Tunnel ready: ${publicOrigin}`);
+    }
+  }
+
+  let lib, mouse, closeMouse;
+  try {
+    ({ lib, mouse, close: closeMouse } = loadMouse());
+  } catch (e) {
+    return fail(e.message);
+  }
+  cleanups.push(() => closeMouse?.());
+  const screen = lib.getScreenSize();
+  const ctl = createDesktopController({ mouse, screen, log, smoothing: opts.smooth });
+
+  console.log(`\nRoom ${room}, screen ${screen.width}x${screen.height}, relay ${serverUrl}`);
+  if (publicOrigin) {
+    const url = `${publicOrigin}/phone?room=${encodeURIComponent(room)}`;
+    console.log(`\nScan with your phone (or open ${url}):\n`);
+    printQr(url);
+  } else {
+    const install = {
+      win32: "winget install --id Cloudflare.cloudflared",
+      darwin: "brew install cloudflared",
+    }[process.platform] ?? "see https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/";
+    console.log(
+      "\nNo public https link, so there's no QR code yet. Phones only share motion data over HTTPS.\n" +
+        `  Easiest: install cloudflared (${install}) and start this again.\n` +
+        `  Or run your own tunnel to ${serverUrl} and start this with --public https://<tunnel-url>.`,
+    );
+  }
+  console.log("\nKeys: c = calibrate, p = pause/resume, Esc = cancel calibration, q = quit\n");
+
+  let phone = false;
+  let status = null;
+  const remote = connectRemote({
+    room,
+    server: serverUrl,
+    ...ctl.handlers,
+    onStatus(s) {
+      if (s.server !== status) {
+        status = s.server;
+        if (status === "connected") log("Connected to the relay.");
+        else if (status === "disconnected") log(`Can't reach the relay at ${serverUrl}. Retrying...`);
+      }
+      if (s.phone !== phone) {
+        phone = s.phone;
+        log(phone ? "Phone connected. Tap Start motion on the phone." : "Phone disconnected.");
+      }
+    },
+  });
+
+  function quit() {
+    remote.close();
+    cleanups.forEach((f) => f());
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+    console.log("Bye.");
+    process.exit(0);
+  }
+
+  process.on("SIGINT", quit);
+  process.on("SIGTERM", quit);
+  if (process.stdin.isTTY) {
+    process.stdin.setRawMode(true);
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (key) => {
+      if (key === "\u0003" || key === "q") quit(); // Ctrl+C in raw mode arrives as a key
+      else if (key === "c") ctl.startCalibration();
+      else if (key === "p") ctl.setPaused(!ctl.paused);
+      else if (key === "\u001b") ctl.cancelCalibration();
+    });
+  }
+}
+
+main().catch((e) => fail(e.stack || e.message));
