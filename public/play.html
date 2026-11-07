@@ -1,0 +1,825 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pointer Playground</title>
+  <style>
+    :root {
+      --bg: #f4f5f7; --card: #fff; --text: #1d2026; --muted: #646b78; --line: #dfe2e7; --soft: #eceef2;
+      --accent: #3867d6; --accent-text: #fff; --good: #1f8a4c; --bad: #c0392b; --warn: #b7791f;
+      --hover-ring: #f5a524;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #16181d; --card: #1f2229; --text: #e8eaee; --muted: #9aa1ad; --line: #30343d; --soft: #282c34; --accent: #6c8ff0; --accent-text: #0f1115; }
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; overflow: hidden; }
+    button { font: inherit; color: inherit; }
+
+    /* ---------- top bar ---------- */
+    .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--card); }
+    .bar h1 { font-size: 1.05rem; margin: 0; white-space: nowrap; }
+    .bar h1 a { color: var(--muted); font-weight: 500; font-size: .85rem; margin-left: 8px; text-decoration: none; }
+    .tabs { display: flex; gap: 4px; background: var(--soft); padding: 3px; border-radius: 10px; }
+    .tab { border: 0; background: transparent; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-weight: 600; color: var(--muted); }
+    .tab[aria-selected="true"] { background: var(--card); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+    .spacer { flex: 1; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: .8rem; color: var(--muted); white-space: nowrap; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+    .pill[data-ok="true"] .dot { background: var(--good); }
+    .pill[data-ok="wait"] .dot { background: var(--warn); }
+    .btn { border: 1px solid var(--line); background: var(--card); padding: 6px 12px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    .btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+    .btn.attn { animation: attn 1.4s infinite; }
+    @keyframes attn { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent); } }
+
+    /* ---------- stage & modes ---------- */
+    main { flex: 1; min-height: 0; position: relative; }
+    .mode { position: absolute; inset: 0; display: none; flex-direction: column; padding: 16px; gap: 12px; }
+    .mode.active { display: flex; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .toolbar .label { color: var(--muted); font-size: .85rem; margin-right: 4px; }
+    .toolbar .stat { margin-left: auto; font-weight: 600; }
+    .seg { border: 1px solid var(--line); background: var(--card); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+    .seg[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+    /* anything the phone can click carries [data-hit]; .hover is the phone cursor being over it */
+    [data-hit] { transition: outline-color .08s, transform .08s; outline: 3px solid transparent; outline-offset: 2px; }
+    [data-hit].hover { outline-color: var(--hover-ring); }
+    [data-hit].zap { animation: zap .3s; }
+    @keyframes zap { 40% { transform: scale(.93); } }
+
+    /* buttons mode */
+    .grid { flex: 1; display: grid; gap: 10px; min-height: 0; }
+    .cell { border: 2px solid var(--line); border-radius: 12px; background: var(--card); font-weight: 700; font-size: clamp(.9rem, 2vw, 1.4rem); cursor: pointer; }
+    .cell.lit { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+
+    /* targets mode */
+    .arena { flex: 1; position: relative; border: 2px dashed var(--line); border-radius: 14px; min-height: 0; overflow: hidden; }
+    .target { position: absolute; border-radius: 50%; border: 0; cursor: pointer; transform: translate(-50%, -50%);
+      background: radial-gradient(circle, #fff 0 18%, var(--bad) 19% 40%, #fff 41% 58%, var(--bad) 59%); }
+    .target.hover { outline-offset: 4px; }
+    .arena .msg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--muted); padding: 16px; }
+    .arena .msg strong { display: block; font-size: 1.4rem; color: var(--text); margin-bottom: 6px; }
+
+    /* keyboard mode */
+    .phrase { font: 600 clamp(1.1rem, 2.6vw, 1.7rem)/1.4 ui-monospace, monospace; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; word-break: break-word; }
+    .phrase .ok { color: var(--good); }
+    .phrase .bad { color: #fff; background: var(--bad); border-radius: 3px; }
+    .phrase .todo { color: var(--muted); }
+    .phrase .caret { border-left: 3px solid var(--accent); margin-left: -1px; animation: blink 1s steps(1) infinite; }
+    @keyframes blink { 50% { border-color: transparent; } }
+    .keys { flex: 1; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+    .krow { flex: 1; display: flex; gap: 8px; justify-content: center; min-height: 0; }
+    .key { flex: 0 1 9%; border: 2px solid var(--line); border-radius: 10px; background: var(--card); font: 700 clamp(1rem, 2.4vw, 1.6rem) system-ui, sans-serif; cursor: pointer; text-transform: uppercase; }
+    .key.wide { flex-basis: 20%; font-size: clamp(.8rem, 1.6vw, 1.1rem); text-transform: none; }
+    .key.space { flex-basis: 45%; }
+
+    /* paint mode */
+    .canvas-wrap { flex: 1; min-height: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #fff; position: relative; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+    .swatch { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--card); box-shadow: 0 0 0 1px var(--line); cursor: pointer; }
+    .swatch[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--text); }
+    .pen { font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--soft); }
+    .pen.down { background: var(--good); color: #fff; }
+
+    /* ---------- phone cursor ---------- */
+    #cursor { position: fixed; left: 0; top: 0; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; pointer-events: none; z-index: 50;
+      border: 3px solid var(--hover-ring); background: color-mix(in srgb, var(--hover-ring) 22%, transparent); box-shadow: 0 0 0 2px rgb(0 0 0 / .35); display: none; }
+    #cursor::after { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: var(--hover-ring); }
+    #cursor.on { display: block; }
+    #cursor.edge { opacity: .45; }
+    #cursor.pen { border-color: var(--good); }
+    .ripple { position: fixed; width: 16px; height: 16px; margin: -8px; border-radius: 50%; border: 3px solid var(--hover-ring); pointer-events: none; z-index: 49; animation: ripple .45s ease-out forwards; }
+    @keyframes ripple { to { transform: scale(4); opacity: 0; } }
+
+    /* ---------- overlays ---------- */
+    .overlay { position: fixed; inset: 0; z-index: 40; display: none; }
+    .overlay.open { display: block; }
+    #calib { background: color-mix(in srgb, var(--bg) 92%, black); }
+    .calib-text { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(520px, calc(100% - 32px)); text-align: center; }
+    .calib-text h2 { margin: 0 0 8px; font-size: 1.5rem; }
+    .calib-text p { margin: 0 0 14px; color: var(--muted); }
+    .calib-text .err { color: var(--bad); font-weight: 600; }
+    .calib-text .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .calib-text .row .btn { padding: 12px 22px; font-size: 1.05rem; }
+    .steps { display: flex; gap: 6px; justify-content: center; margin-bottom: 14px; }
+    .steps span { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+    .steps span.done { background: var(--good); }
+    .steps span.now { background: var(--accent); }
+    .ctarget { position: absolute; width: 56px; height: 56px; margin: -28px; border-radius: 50%; display: none; }
+    .ctarget.on { display: block; }
+    .ctarget::before, .ctarget::after { content: ""; position: absolute; inset: 0; border-radius: 50%; }
+    .ctarget::before { background: var(--accent); transform: scale(.28); }
+    .ctarget::after { border: 3px solid var(--accent); animation: pulse 1.2s infinite; }
+    @keyframes pulse { 0% { transform: scale(.4); opacity: 1; } 100% { transform: scale(1.3); opacity: 0; } }
+    .signal { position: absolute; bottom: 16px; left: 0; right: 0; text-align: center; font-size: .85rem; color: var(--muted); }
+
+    #pair { background: rgb(0 0 0 / .45); }
+    .pair-card { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(360px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto;
+      background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+    .pair-card h2 { margin: 0 0 10px; font-size: 1.1rem; }
+    #qr { background: #fff; border-radius: 10px; padding: 8px; aspect-ratio: 1; display: grid; place-items: center; width: 100%; max-width: 260px; margin: 0 auto; }
+    #qr svg { width: 100%; height: auto; display: block; }
+    #qr .placeholder { color: #555; font-size: .9rem; text-align: center; padding: 16px; }
+    .code { font: 700 1.3rem ui-monospace, monospace; letter-spacing: .12em; text-align: center; margin: 10px 0 2px; }
+    #phoneLink { display: block; font-size: .78rem; word-break: break-all; color: var(--accent); text-align: center; }
+    .pair-card label { display: block; font-size: .85rem; color: var(--muted); margin: 12px 0 4px; }
+    .pair-card input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; font-size: .9rem; }
+    .pair-card .err { color: var(--bad); font-size: .8rem; min-height: 1em; margin-top: 4px; }
+    .pair-card .row { display: flex; gap: 8px; margin-top: 14px; }
+    .pair-card .row .btn { flex: 1; }
+
+    #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 16px; border-radius: 999px; font-weight: 600; z-index: 60; opacity: 0; transition: opacity .2s; pointer-events: none; }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <h1>Playground <a href="/" title="Yes/No demo">Yes/No</a></h1>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-hit data-mode="buttons" aria-selected="true">Buttons</button>
+      <button class="tab" role="tab" data-hit data-mode="targets" aria-selected="false">Targets</button>
+      <button class="tab" role="tab" data-hit data-mode="keyboard" aria-selected="false">Keyboard</button>
+      <button class="tab" role="tab" data-hit data-mode="paint" aria-selected="false">Paint</button>
+    </div>
+    <div class="spacer"></div>
+    <span class="pill" id="serverPill" data-ok="wait" title="Server connection"><span class="dot"></span><span>Server</span></span>
+    <span class="pill" id="phonePill" data-ok="false" title="Phone connection"><span class="dot"></span><span>No phone</span></span>
+    <button class="btn" id="smoothBtn" data-hit title="Cursor smoothing: click to cycle">Smooth: Medium</button>
+    <button class="btn" id="calibBtn" data-hit>Calibrate</button>
+    <button class="btn" id="pairBtn" title="Show the QR code">Pair</button>
+  </div>
+
+  <main>
+    <!-- BUTTONS -->
+    <section class="mode active" id="mode-buttons">
+      <div class="toolbar">
+        <span class="label">Size</span>
+        <button class="seg" data-hit data-grid="3x2">Big</button>
+        <button class="seg" data-hit data-grid="5x3" aria-pressed="true">Medium</button>
+        <button class="seg" data-hit data-grid="8x5">Small</button>
+        <button class="seg" data-hit data-grid="12x7">Tiny</button>
+        <button class="seg" data-hit id="clearGrid">Clear</button>
+        <span class="stat" id="gridStat"></span>
+      </div>
+      <div class="grid" id="grid"></div>
+    </section>
+
+    <!-- TARGETS -->
+    <section class="mode" id="mode-targets">
+      <div class="toolbar">
+        <span class="label">Target size</span>
+        <button class="seg" data-hit data-tsize="110">Big</button>
+        <button class="seg" data-hit data-tsize="70" aria-pressed="true">Medium</button>
+        <button class="seg" data-hit data-tsize="42">Small</button>
+        <button class="seg" data-hit id="startTargets">Start</button>
+        <span class="stat" id="targetStat"></span>
+      </div>
+      <div class="arena" id="arena"></div>
+    </section>
+
+    <!-- KEYBOARD -->
+    <section class="mode" id="mode-keyboard">
+      <div class="toolbar">
+        <span class="label">Type the phrase with the phone</span>
+        <button class="seg" data-hit id="nextPhrase">New phrase</button>
+        <span class="stat" id="kbStat"></span>
+      </div>
+      <div class="phrase" id="phrase"></div>
+      <div class="keys" id="keys"></div>
+    </section>
+
+    <!-- PAINT -->
+    <section class="mode" id="mode-paint">
+      <div class="toolbar" id="paintBar">
+        <span class="label">Tap the phone on the canvas to start / stop drawing</span>
+        <span class="pen" id="penState">Pen up</span>
+        <span class="spacer"></span>
+        <button class="seg" data-hit data-brush="4">Thin</button>
+        <button class="seg" data-hit data-brush="10" aria-pressed="true">Medium</button>
+        <button class="seg" data-hit data-brush="24">Thick</button>
+        <button class="seg" data-hit id="clearCanvas">Clear</button>
+      </div>
+      <div class="canvas-wrap" id="canvasWrap"><canvas id="canvas"></canvas></div>
+    </section>
+  </main>
+
+  <!-- CALIBRATION -->
+  <div class="overlay" id="calib" role="dialog" aria-modal="true" aria-labelledby="calibTitle">
+    <div class="ctarget" id="ctarget"></div>
+    <div class="calib-text">
+      <div class="steps" id="calibSteps"><span></span><span></span><span></span><span></span><span></span></div>
+      <h2 id="calibTitle">Calibrate</h2>
+      <p id="calibMsg"></p>
+      <div class="row" id="calibActions"></div>
+    </div>
+    <div class="signal" id="signal"></div>
+  </div>
+
+  <!-- PAIRING -->
+  <div class="overlay" id="pair" role="dialog" aria-modal="true" aria-labelledby="pairTitle">
+    <div class="pair-card">
+      <h2 id="pairTitle">Pair your phone</h2>
+      <div id="qr"></div>
+      <div class="code" id="roomCode"></div>
+      <a id="phoneLink" target="_blank" rel="noopener"></a>
+      <div id="originBox" hidden>
+        <label for="origin">Public HTTPS URL of this server (tunnel)</label>
+        <input id="origin" type="url" placeholder="https://xxxx.ngrok-free.app" autocomplete="off" spellcheck="false">
+        <div class="err" id="originErr"></div>
+      </div>
+      <div class="row">
+        <button class="btn" id="newRoom">New code</button>
+        <button class="btn primary" id="closePair">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="cursor"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module">
+import { connectRemote } from "/remote-client.js";
+import { setupPairing } from "/pairing.js";
+import { createCalibration, CORNER_TARGETS, createOneEuro, SMOOTHING } from "/pointer.js";
+
+const $ = (id) => document.getElementById(id);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+
+// =====================================================================
+// Shared helpers
+// =====================================================================
+let toastTimer;
+function toast(text) {
+  $("toast").textContent = text;
+  $("toast").classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => $("toast").classList.remove("show"), 1600);
+}
+function zap(el) { el.classList.remove("zap"); void el.offsetWidth; el.classList.add("zap"); }
+function ripple(x, y) {
+  const r = document.createElement("div");
+  r.className = "ripple"; r.style.left = x + "px"; r.style.top = y + "px";
+  document.body.append(r);
+  setTimeout(() => r.remove(), 500);
+}
+// Mark btn as the selected one among its siblings that share the same data-* option (data-grid, data-color...).
+function pressGroup(btn) {
+  const option = Object.keys(btn.dataset).find((k) => k !== "hit");
+  for (const b of btn.parentElement.children) {
+    if (b.dataset && option in b.dataset) b.setAttribute("aria-pressed", String(b === btn));
+  }
+}
+const store = {
+  get(k) { try { return JSON.parse(sessionStorage.getItem(k)); } catch { return null; } },
+  set(k, v) { try { sessionStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+
+// =====================================================================
+// Modes
+// =====================================================================
+const modes = {};
+let currentMode = "buttons";
+
+function showMode(name) {
+  if (name !== currentMode) modes[currentMode]?.onHide?.();
+  currentMode = name;
+  for (const t of $$(".tab")) t.setAttribute("aria-selected", String(t.dataset.mode === name));
+  for (const m of $$(".mode")) m.classList.toggle("active", m.id === "mode-" + name);
+  modes[name]?.onShow?.();
+  try { localStorage.setItem("playMode", name); } catch {}
+}
+for (const t of $$(".tab")) t.addEventListener("click", () => showMode(t.dataset.mode));
+
+// ---------- Buttons ----------
+modes.buttons = (() => {
+  const grid = $("grid");
+  let cols = 5, rows = 3;
+  function build() {
+    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+    grid.replaceChildren(...Array.from({ length: cols * rows }, (_, i) => {
+      const b = document.createElement("button");
+      b.className = "cell"; b.dataset.hit = ""; b.textContent = i + 1;
+      b.addEventListener("click", () => { b.classList.toggle("lit"); stat(); });
+      return b;
+    }));
+    stat();
+  }
+  function stat() {
+    const lit = $$(".cell.lit", grid).length, total = cols * rows;
+    $("gridStat").textContent = lit === total ? `All ${total} lit! 🎉` : `Lit ${lit} / ${total}`;
+  }
+  for (const b of $$("[data-grid]")) b.addEventListener("click", () => {
+    [cols, rows] = b.dataset.grid.split("x").map(Number);
+    pressGroup(b); build();
+  });
+  $("clearGrid").addEventListener("click", () => { $$(".cell", grid).forEach((c) => c.classList.remove("lit")); stat(); });
+  build();
+  return {};
+})();
+
+// ---------- Targets ----------
+modes.targets = (() => {
+  const arena = $("arena");
+  const TOTAL = 15;
+  let size = 70, running = false, hits = 0, misses = 0, times = [], shownAt = 0, target = null;
+
+  function intro(title, body) {
+    arena.innerHTML = `<div class="msg"><div><strong>${title}</strong>${body}</div></div>`;
+  }
+  function spawn() {
+    target?.remove();
+    const r = arena.getBoundingClientRect();
+    const pad = size / 2 + 8;
+    const x = pad + Math.random() * Math.max(1, r.width - 2 * pad);
+    const y = pad + Math.random() * Math.max(1, r.height - 2 * pad);
+    target = document.createElement("button");
+    target.className = "target"; target.dataset.hit = ""; target.setAttribute("aria-label", "target");
+    Object.assign(target.style, { left: x + "px", top: y + "px", width: size + "px", height: size + "px" });
+    target.addEventListener("click", (e) => { e.stopPropagation(); hit(); });
+    arena.append(target);
+    shownAt = performance.now();
+  }
+  function hit() {
+    times.push(performance.now() - shownAt);
+    hits++;
+    stat();
+    if (hits >= TOTAL) return finish();
+    spawn();
+  }
+  function stat() {
+    const avg = times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : 0;
+    $("targetStat").textContent = running || hits ? `${hits}/${TOTAL} · misses ${misses} · avg ${avg} ms` : "";
+  }
+  function finish() {
+    running = false; target?.remove(); target = null;
+    const avg = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
+    const best = Math.round(Math.min(...times));
+    const acc = Math.round((100 * hits) / (hits + misses));
+    intro("Done!", `Average ${avg} ms per target · best ${best} ms · accuracy ${acc}%<br>Press Start to go again.`);
+    $("startTargets").textContent = "Start";
+  }
+  function start() {
+    running = true; hits = 0; misses = 0; times = [];
+    arena.innerHTML = ""; $("startTargets").textContent = "Restart";
+    stat(); spawn();
+  }
+  arena.addEventListener("click", () => { if (running) { misses++; stat(); } });
+  $("startTargets").addEventListener("click", start);
+  for (const b of $$("[data-tsize]")) b.addEventListener("click", () => {
+    size = Number(b.dataset.tsize); pressGroup(b);
+    if (running) spawn();
+  });
+  intro("Target practice", `Hit ${TOTAL} targets as fast as you can.<br>Point the phone at Start and tap.`);
+  return {
+    // remote clicks on empty arena space count as misses, same as mouse clicks
+    remoteClick(x, y, el) { if (running && el === arena) { misses++; stat(); zap(arena); return true; } },
+  };
+})();
+
+// ---------- Keyboard ----------
+modes.keyboard = (() => {
+  const PHRASES = [
+    "point and tap", "hello from my phone", "the quick brown fox", "wave the wand",
+    "pointing is fun", "type with a remote", "jump over the lazy dog", "left right up down",
+  ];
+  const ROWS = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
+  let phrase = "", typed = "", startedAt = 0, pi = -1;
+
+  const keys = $("keys");
+  for (const row of ROWS) {
+    const r = document.createElement("div"); r.className = "krow";
+    for (const ch of row) r.append(key(ch, () => type(ch)));
+    if (row === "zxcvbnm") r.append(key("⌫ Delete", () => { typed = typed.slice(0, -1); render(); }, "wide"));
+    keys.append(r);
+  }
+  const last = document.createElement("div"); last.className = "krow";
+  last.append(key("space", () => type(" "), "wide space"));
+  keys.append(last);
+
+  function key(label, fn, cls = "") {
+    const b = document.createElement("button");
+    b.className = "key " + cls; b.dataset.hit = ""; b.textContent = label;
+    b.addEventListener("click", fn);
+    return b;
+  }
+  function type(ch) {
+    if (!typed) startedAt = performance.now();
+    if (typed.length < phrase.length + 5) typed += ch;
+    render();
+    if (typed === phrase) {
+      const secs = (performance.now() - startedAt) / 1000;
+      const wpm = Math.round((phrase.length / 5) / (secs / 60));
+      $("kbStat").textContent = `Done in ${secs.toFixed(1)} s · ${wpm} WPM`;
+      setTimeout(next, 1400);
+    }
+  }
+  function render() {
+    let html = "";
+    for (let i = 0; i < Math.max(phrase.length, typed.length); i++) {
+      const want = phrase[i] ?? "", got = typed[i];
+      const show = (c) => (c === " " ? "&nbsp;" : c);
+      if (i === typed.length) html += '<span class="caret"></span>';
+      if (got === undefined) html += `<span class="todo">${show(want)}</span>`;
+      else html += `<span class="${got === want ? "ok" : "bad"}">${show(got)}</span>`;
+    }
+    if (typed.length >= phrase.length) html += '<span class="caret"></span>';
+    $("phrase").innerHTML = html;
+    if (typed !== phrase) {
+      const wrong = [...typed].filter((c, i) => c !== phrase[i]).length;
+      $("kbStat").textContent = `${typed.length}/${phrase.length}` + (wrong ? ` · ${wrong} wrong` : "");
+    }
+  }
+  function next() {
+    pi = (pi + 1) % PHRASES.length;
+    phrase = PHRASES[pi]; typed = "";
+    render();
+  }
+  $("nextPhrase").addEventListener("click", next);
+  document.addEventListener("keydown", (e) => {
+    if (currentMode !== "keyboard" || e.target instanceof HTMLInputElement) return;
+    if (/^[a-z ]$/i.test(e.key)) { type(e.key.toLowerCase()); e.preventDefault(); }
+    else if (e.key === "Backspace") { typed = typed.slice(0, -1); render(); e.preventDefault(); }
+  });
+  next();
+  return {};
+})();
+
+// ---------- Paint ----------
+modes.paint = (() => {
+  const canvas = $("canvas"), wrap = $("canvasWrap"), ctx = canvas.getContext("2d");
+  const COLORS = ["#1d2026", "#c0392b", "#e67e22", "#f1c40f", "#1f8a4c", "#3867d6", "#8e44ad"];
+  let color = COLORS[0], brush = 10, penDown = false, lastPt = null, mouseDown = false;
+
+  const bar = $("paintBar"), anchor = $$("[data-brush]", bar)[0];
+  for (const c of COLORS) {
+    const s = document.createElement("button");
+    s.className = "swatch"; s.dataset.hit = ""; s.dataset.color = c; s.style.background = c;
+    s.setAttribute("aria-label", "colour " + c); s.setAttribute("aria-pressed", String(c === color));
+    s.addEventListener("click", () => { color = c; pressGroup(s); });
+    bar.insertBefore(s, anchor);
+  }
+  for (const b of $$("[data-brush]")) b.addEventListener("click", () => { brush = Number(b.dataset.brush); pressGroup(b); });
+  $("clearCanvas").addEventListener("click", () => ctx.clearRect(0, 0, canvas.width, canvas.height));
+
+  function fit() {
+    const r = wrap.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+    const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+    if (!w || !h || (canvas.width === w && canvas.height === h)) return;
+    const old = document.createElement("canvas");
+    old.width = canvas.width; old.height = canvas.height;
+    if (old.width && old.height) old.getContext("2d").drawImage(canvas, 0, 0);
+    canvas.width = w; canvas.height = h;
+    ctx.drawImage(old, 0, 0);
+  }
+  new ResizeObserver(fit).observe(wrap);
+
+  function toCanvas(x, y) {
+    const r = canvas.getBoundingClientRect(), dpr = canvas.width / r.width;
+    return [(x - r.left) * dpr, (y - r.top) * dpr];
+  }
+  function line(a, b) {
+    ctx.strokeStyle = color; ctx.lineWidth = brush * (canvas.width / canvas.getBoundingClientRect().width);
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke();
+  }
+  function setPen(down) {
+    penDown = down; lastPt = null;
+    $("penState").textContent = down ? "Pen down: drawing" : "Pen up";
+    $("penState").classList.toggle("down", down);
+    $("cursor").classList.toggle("pen", down);
+  }
+
+  // mouse drawing for testing without a phone
+  canvas.addEventListener("pointerdown", (e) => { mouseDown = true; lastPt = toCanvas(e.clientX, e.clientY); line(lastPt, lastPt); });
+  canvas.addEventListener("pointermove", (e) => { if (!mouseDown) return; const p = toCanvas(e.clientX, e.clientY); line(lastPt, p); lastPt = p; });
+  addEventListener("pointerup", () => { mouseDown = false; lastPt = null; });
+
+  return {
+    onShow: fit,
+    onHide() { setPen(false); },
+    remoteClick(x, y, el) {
+      if (el !== canvas) { if (penDown) setPen(false); return false; } // clicking a tool lifts the pen
+      setPen(!penDown);
+      if (penDown) { lastPt = toCanvas(x, y); line(lastPt, lastPt); }
+      return true;
+    },
+    cursorMoved(x, y) {
+      if (!penDown) return;
+      const p = toCanvas(x, y);
+      if (lastPt) line(lastPt, p);
+      lastPt = p;
+    },
+  };
+})();
+
+
+// =====================================================================
+// Phone pointer: calibration, cursor, hover, clicks
+// =====================================================================
+const cursorEl = $("cursor");
+const fx = createOneEuro(), fy = createOneEuro();
+
+// Smoothing level: cycles Light -> Medium -> Strong, remembered per browser.
+const SMOOTH_ORDER = ["light", "medium", "strong"];
+let smoothLevel = "medium";
+try { const s = localStorage.getItem("playSmoothing"); if (SMOOTHING[s]) smoothLevel = s; } catch {}
+function applySmoothing() {
+  fx.setParams(SMOOTHING[smoothLevel]); fy.setParams(SMOOTHING[smoothLevel]);
+  $("smoothBtn").textContent = "Smooth: " + smoothLevel[0].toUpperCase() + smoothLevel.slice(1);
+  try { localStorage.setItem("playSmoothing", smoothLevel); } catch {}
+}
+$("smoothBtn").addEventListener("click", () => {
+  smoothLevel = SMOOTH_ORDER[(SMOOTH_ORDER.indexOf(smoothLevel) + 1) % SMOOTH_ORDER.length];
+  applySmoothing();
+  toast(smoothLevel === "strong" ? "Strong: steadiest, a bit more lag" : smoothLevel === "light" ? "Light: snappy, more jitter" : "Medium smoothing");
+});
+applySmoothing();
+let calibration = null;   // from createCalibration()
+let calibSid = null;      // phone page session the calibration belongs to
+let calibDirs = null;     // raw corner readings (to restore after a laptop reload)
+let lastPoint = null;     // { v, sid, t }
+let cursor = null;        // { x, y } in px, smoothed
+let hovered = null;
+let phoneConnected = false;
+let sidChecked = null;    // last phone session we tried to restore a saved calibration for
+
+function restoreCalibration(sid) {
+  const saved = store.get("playCalibration");
+  if (!saved || saved.sid !== sid) return false;
+  const c = createCalibration(saved.dirs);
+  if (c.error) return false;
+  calibration = c; calibSid = sid; calibDirs = saved.dirs;
+  if (saved.recenter) c.recenter(saved.recenter);
+  return true;
+}
+function saveCalibration(recenterDir = null) {
+  store.set("playCalibration", { sid: calibSid, dirs: calibDirs, recenter: recenterDir });
+}
+
+// Touchpad nudge: a 2D offset (fractions of the viewport) added on top of the pointing.
+// Applied after smoothing so drags feel immediate. Cleared by recenter and calibration.
+let nudge = [0, 0];
+let gyroPos = null; // last smoothed pointing position in px, before the nudge
+const DRAG_GAIN = 0.5; // a full-width swipe on the phone touchpad moves half the screen
+
+function mapRaw(v) {
+  const f = calibration?.map(v);
+  return f ? [f[0] * innerWidth, f[1] * innerHeight] : null;
+}
+function mapToScreen(v) {
+  const p = mapRaw(v);
+  return p ? [p[0] + nudge[0] * innerWidth, p[1] + nudge[1] * innerHeight] : null;
+}
+function resetNudge() { nudge = [0, 0]; }
+
+const STICKY_PX = 8;
+function nearRect(el, x, y, margin) {
+  const r = el.getBoundingClientRect();
+  return x >= r.left - margin && x <= r.right + margin && y >= r.top - margin && y <= r.bottom + margin;
+}
+
+function setHover(el) {
+  if (el === hovered) return;
+  hovered?.classList.remove("hover");
+  hovered = el;
+  hovered?.classList.add("hover");
+}
+
+function hitTest(x, y) {
+  const cx = Math.min(innerWidth - 1, Math.max(0, x)), cy = Math.min(innerHeight - 1, Math.max(0, y));
+  const el = document.elementFromPoint(cx, cy);
+  return { el, hit: el?.closest("[data-hit]") || null };
+}
+
+function onPoint(msg) {
+  lastPoint = { v: msg.v, sid: msg.sid, t: performance.now() };
+  signalSeen();
+  if (msg.sid !== calibSid && msg.sid !== sidChecked) {
+    // New phone page session (first contact, or the phone reloaded): its sensor
+    // reference may differ, so only a calibration saved for this session is valid.
+    sidChecked = msg.sid;
+    const hadOne = !!calibration;
+    calibration = null;
+    if (!restoreCalibration(msg.sid) && hadOne) {
+      hideCursor();
+      $("calibBtn").classList.add("attn");
+      toast("Phone page reloaded: please recalibrate");
+    }
+  }
+  if (!calibration) {
+    if (!calibDismissed && !calib.open && phoneConnected) openCalibration();
+    return;
+  }
+  const p = mapRaw(msg.v);
+  if (!p) return hideCursor();
+  const t = performance.now();
+  gyroPos = [fx.filter(p[0], t), fy.filter(p[1], t)];
+  renderCursor();
+}
+
+function renderCursor() {
+  if (!gyroPos) return;
+  const x = gyroPos[0] + nudge[0] * innerWidth, y = gyroPos[1] + nudge[1] * innerHeight;
+  cursor = { x, y };
+  const outside = x < 0 || y < 0 || x > innerWidth || y > innerHeight;
+  const cx = Math.min(innerWidth, Math.max(0, x)), cy = Math.min(innerHeight, Math.max(0, y));
+  cursorEl.style.transform = `translate(${cx}px, ${cy}px)`;
+  cursorEl.classList.add("on");
+  cursorEl.classList.toggle("edge", outside);
+  // Sticky hover: keep the current highlight until the cursor is clearly outside it,
+  // so jitter on a border doesn't flicker between two buttons.
+  if (outside) setHover(null);
+  else if (!(hovered?.isConnected && nearRect(hovered, x, y, STICKY_PX))) setHover(hitTest(x, y).hit);
+  if (!calib.open) modes[currentMode]?.cursorMoved?.(x, y);
+}
+
+function hideCursor() {
+  cursorEl.classList.remove("on");
+  setHover(null);
+  fx.reset(); fy.reset();
+  cursor = null; gyroPos = null;
+}
+
+function onRemoteClick(msg) {
+  const v = msg.v || lastPoint?.v;
+  if (calib.open && calib.step < 5) return calibrationTap(v, msg.sid);
+  if (!calibration || !v) {
+    if (phoneConnected) openCalibration();
+    return;
+  }
+  // Click where the phone was aimed when the finger touched down (before the tap jolted it).
+  // If that's very close to the shown cursor, use the cursor so what you see is what you click.
+  let p = mapToScreen(v);
+  if (!p) return;
+  if (cursor && Math.hypot(p[0] - cursor.x, p[1] - cursor.y) < 40) p = [cursor.x, cursor.y];
+  const [x, y] = p;
+  if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return toast("Off screen");
+  ripple(x, y);
+  const { el, hit: under } = hitTest(x, y);
+  if (!calib.open && modes[currentMode]?.remoteClick?.(x, y, el)) return;
+  // Prefer the highlighted element if the tap is still within its sticky margin,
+  // so a tiny wobble at tap time doesn't click the neighbour.
+  const hit = hovered?.isConnected && nearRect(hovered, x, y, STICKY_PX) ? hovered : under;
+  if (hit) { zap(hit); hit.click(); }
+}
+
+function onDrag(msg) {
+  if (!calibration || !gyroPos || (calib.open && calib.step < 5)) return;
+  const w = msg.w > 50 ? msg.w : 360;
+  const k = (DRAG_GAIN * innerWidth) / w; // phone px -> laptop px
+  nudge = [nudge[0] + (msg.dx * k) / innerWidth, nudge[1] + (msg.dy * k) / innerHeight];
+  renderCursor();
+}
+
+function onPhoneCalibrate() {
+  closePair();
+  calibDismissed = false;
+  openCalibration();
+}
+
+function onRecenter(msg) {
+  if (!calibration || !msg.v || calib.open) return;
+  resetNudge();
+  calibration.recenter(msg.v);
+  saveCalibration(msg.v);
+  fx.reset(); fy.reset();
+  toast("Recentered: cursor is now in the middle");
+}
+
+// ---------- calibration overlay ----------
+const calib = { open: false, step: 0, dirs: [] };
+let calibDismissed = false;
+const STEP_NAMES = ["top-left", "top-right", "bottom-right", "bottom-left"];
+
+function openCalibration() {
+  calib.open = true; calib.step = 0; calib.dirs = [];
+  $("calib").classList.add("open");
+  $("calibBtn").classList.remove("attn");
+  hideCursor();
+  renderCalibration();
+}
+function closeCalibration() {
+  calib.open = false;
+  calibDismissed = true;
+  $("calib").classList.remove("open");
+  $("ctarget").classList.remove("on");
+  if (!calibration) $("calibBtn").classList.add("attn");
+}
+function actionButtons(list) {
+  $("calibActions").replaceChildren(...list.map(([label, fn, primary]) => {
+    const b = document.createElement("button");
+    b.className = "btn" + (primary ? " primary" : ""); b.dataset.hit = ""; b.textContent = label;
+    b.addEventListener("click", fn);
+    return b;
+  }));
+}
+function placeTarget(fx_, fy_) {
+  const t = $("ctarget");
+  t.style.left = fx_ * 100 + "%"; t.style.top = fy_ * 100 + "%";
+  t.classList.add("on");
+}
+function renderCalibration(error = "") {
+  const dots = $$("#calibSteps span");
+  dots.forEach((d, i) => { d.className = i < calib.step ? "done" : i === calib.step ? "now" : ""; });
+  if (calib.step < 4) {
+    placeTarget(...CORNER_TARGETS[calib.step]);
+    $("calibTitle").textContent = `Point at the ${STEP_NAMES[calib.step]} dot`;
+    $("calibMsg").innerHTML = (error ? `<span class="err">${error}</span><br>` : "") +
+      "Aim the <b>top edge</b> of your phone at the pulsing dot, hold steady, and tap the phone’s touchpad. " +
+      "Stand or sit where you’ll play from.";
+    actionButtons([["Cancel", closeCalibration]]);
+  } else if (calib.step === 4) {
+    placeTarget(0.5, 0.5);
+    $("calibTitle").textContent = "Check: point at the center dot";
+    $("calibMsg").textContent = "You should see the cursor now. Aim at the middle dot and tap to measure accuracy.";
+    actionButtons([["Redo", openCalibration], ["Skip check", finishCalibration, true]]);
+  }
+}
+function calibrationTap(v, sid) {
+  if (!v) return renderCalibration("No pointing data from the phone yet. Tap Start motion on the phone first.");
+  if (calib.step < 4) {
+    calib.dirs.push(v);
+    calib.step++;
+    if (calib.step === 4) {
+      const c = createCalibration(calib.dirs);
+      if (c.error) { calib.step = 0; calib.dirs = []; return renderCalibration(c.error); }
+      calibration = c; calibSid = sid; calibDirs = calib.dirs.slice();
+      resetNudge();
+      saveCalibration();
+      fx.reset(); fy.reset();
+    }
+    return renderCalibration();
+  }
+  // step 4: center check
+  const p = mapToScreen(v);
+  calib.step = 5;
+  $$("#calibSteps span").forEach((d) => (d.className = "done"));
+  $("ctarget").classList.remove("on");
+  const err = p ? Math.round(Math.hypot(p[0] - innerWidth / 2, p[1] - innerHeight / 2)) : null;
+  const pct = err === null ? null : Math.round((100 * err) / Math.hypot(innerWidth, innerHeight));
+  $("calibTitle").textContent = err === null ? "Couldn’t read that tap" : err < 60 ? "Nice, you’re calibrated" : "Calibrated, but a bit off";
+  $("calibMsg").textContent = err === null ? "Try the check again or redo the calibration." :
+    `The tap landed ${err}px from the center (${pct}% of the screen).` + (err >= 60 ? " Redo it if clicking feels wrong." : "");
+  actionButtons([["Redo", openCalibration], ["Start playing", finishCalibration, true]]);
+}
+function finishCalibration() {
+  closeCalibration();
+  toast("Touchpad: tap = click · drag = fine move · hold = recenter");
+}
+$("calibBtn").addEventListener("click", openCalibration);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && calib.open) closeCalibration(); });
+
+// "is the phone actually sending motion?" indicator on the calibration screen
+let signalTimer;
+function signalSeen() {
+  $("signal").textContent = "Phone motion: receiving ✓";
+  clearTimeout(signalTimer);
+  signalTimer = setTimeout(() => {
+    $("signal").textContent = phoneConnected ? "Phone connected, but no motion yet: tap Start motion on the phone." : "Phone not connected.";
+    hideCursor();
+  }, 1000);
+}
+
+// ---------- pairing + connection ----------
+function setPill(el, ok, text) { el.dataset.ok = String(ok); el.lastElementChild.textContent = text; }
+function onStatus({ server, phone }) {
+  setPill($("serverPill"), server === "connected" ? true : server === "connecting" ? "wait" : false, "Server");
+  setPill($("phonePill"), phone, phone ? "Phone" : "No phone");
+  const was = phoneConnected;
+  phoneConnected = phone;
+  if (phone && !was) { closePair(); $("signal").textContent = "Phone connected, but no motion yet: tap Start motion on the phone."; }
+  if (!phone) { hideCursor(); $("signal").textContent = "Phone not connected."; }
+}
+const openPair = () => $("pair").classList.add("open");
+const closePair = () => $("pair").classList.remove("open");
+$("pairBtn").addEventListener("click", openPair);
+$("closePair").addEventListener("click", closePair);
+$("pair").addEventListener("click", (e) => { if (e.target === $("pair")) closePair(); });
+
+let remote;
+setupPairing({
+  qr: $("qr"), code: $("roomCode"), link: $("phoneLink"),
+  originBox: $("originBox"), originInput: $("origin"), originErr: $("originErr"),
+  newRoomBtn: $("newRoom"),
+  onRoom(room) {
+    remote?.close();
+    calibration = null; hideCursor();
+    remote = connectRemote({ room, onPoint, onClick: onRemoteClick, onRecenter, onDrag, onCalibrate: onPhoneCalibrate, onStatus });
+  },
+});
+setTimeout(() => { if (!phoneConnected) openPair(); }, 1500);
+
+// restore last mode
+try { const m = localStorage.getItem("playMode"); if (m && modes[m]) showMode(m); } catch {}
+addEventListener("resize", () => { fx.reset(); fy.reset(); });
+
+// handy for debugging from the console
+window.__play = { get calibration() { return calibration; }, openCalibration, showMode };
+</script>
+</body>
+</html>

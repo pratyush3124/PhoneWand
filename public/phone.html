@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#1b1e24">
+  <title>Phone Remote</title>
+  <style>
+    :root {
+      --bg: #1b1e24; --panel: #252931; --line: #343a45; --text: #f1f3f6; --muted: #a3aab6;
+      --accent: #5b82f0; --yes: #1f8a4c; --no: #c0392b; --good: #2fb36a; --warn: #e0a030;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; height: 100%; background: var(--bg); color: var(--text);
+      font: 16px/1.4 system-ui, -apple-system, sans-serif;
+      overscroll-behavior: none; touch-action: none;
+      -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      display: grid; grid-template-rows: 1fr 1fr; height: 100dvh;
+      padding: max(env(safe-area-inset-top), 10px) 12px max(env(safe-area-inset-bottom), 12px);
+      gap: 12px;
+    }
+    button { font: inherit; color: inherit; -webkit-tap-highlight-color: transparent; }
+
+    /* ---------- top half: controls ---------- */
+    .controls { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+    .status { display: flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--muted); }
+    .status .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+    .status[data-ok="true"] .dot { background: var(--good); }
+    .status[data-ok="wait"] .dot { background: var(--warn); }
+    .status .room { margin-left: auto; font: 600 .8rem ui-monospace, monospace; letter-spacing: .08em; }
+    .ctl-grid { flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1.4fr 1fr; gap: 10px; min-height: 0; }
+    .ctl {
+      border: 1px solid var(--line); border-radius: 16px; background: var(--panel);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      font-weight: 700; font-size: 1.05rem; padding: 8px; min-height: 0; transition: transform .08s, filter .08s;
+    }
+    .ctl small { font-weight: 500; font-size: .75rem; color: var(--muted); text-align: center; }
+    .ctl:active { transform: scale(.97); filter: brightness(1.2); }
+    .ctl.primary { grid-column: 1 / -1; background: var(--accent); border-color: var(--accent); color: #fff; font-size: 1.3rem; }
+    .ctl.primary small { color: rgb(255 255 255 / .8); }
+    .ctl svg { width: 26px; height: 26px; }
+    .ctl:disabled { opacity: .4; }
+    #hint { font-size: .8rem; color: var(--muted); text-align: center; min-height: 1.2em; margin: 0; }
+
+    /* ---------- bottom half: touchpad ---------- */
+    #pad {
+      position: relative; border-radius: 20px; border: 1px solid var(--line); overflow: hidden;
+      background:
+        radial-gradient(circle at 1px 1px, rgb(255 255 255 / .07) 1px, transparent 0) 0 0 / 18px 18px,
+        var(--panel);
+      display: grid; place-items: center; text-align: center; transition: background-color .12s, box-shadow .12s;
+    }
+    #pad[data-state="yes"] { box-shadow: inset 0 0 0 4px var(--yes); }
+    #pad[data-state="no"]  { box-shadow: inset 0 0 0 4px var(--no); }
+    #pad.pressed { background-color: #2d323c; }
+    #padLabel { font-weight: 800; font-size: clamp(1.6rem, 9vw, 2.6rem); letter-spacing: .02em; pointer-events: none; }
+    #padHelp { font-size: .8rem; color: var(--muted); margin-top: 6px; pointer-events: none; line-height: 1.6; }
+    #touchDot {
+      position: absolute; width: 56px; height: 56px; margin: -28px; border-radius: 50%; pointer-events: none;
+      background: rgb(255 255 255 / .12); border: 2px solid rgb(255 255 255 / .35); display: none;
+    }
+    #touchDot.on { display: block; }
+    #touchDot.drag { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 25%, transparent); }
+    #holdRing {
+      position: absolute; inset: 0; pointer-events: none; border-radius: 20px;
+      box-shadow: inset 0 0 0 0 var(--warn); transition: box-shadow 0s;
+    }
+    #holdRing.charging { box-shadow: inset 0 0 0 6px var(--warn); transition: box-shadow .7s linear; }
+
+    /* blocking messages (no room / needs https) */
+    #blocker { position: fixed; inset: 0; background: var(--bg); display: none; place-items: center; text-align: center; padding: 24px; z-index: 5; }
+    #blocker.on { display: grid; }
+    #blocker h1 { margin: 0 0 8px; font-size: 1.6rem; }
+    #blocker p { margin: 0; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <section class="controls">
+    <div class="status" id="status" data-ok="wait"><span class="dot"></span><span id="statusText">Connecting…</span><span class="room" id="roomLabel"></span></div>
+    <div class="ctl-grid">
+      <button class="ctl primary" id="calibBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/><circle cx="12" cy="12" r="2.5"/></svg>
+        Calibrate
+        <small>Opens the 4-corner calibration on the laptop</small>
+      </button>
+      <button class="ctl" id="recenterBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+        Recenter
+        <small>Aim at the middle first</small>
+      </button>
+      <button class="ctl" id="startBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
+        <span id="startLabel">Start motion</span>
+        <small id="startSub">Needed once per page load</small>
+      </button>
+    </div>
+    <p id="hint"></p>
+  </section>
+
+  <section id="pad" data-state="center" aria-label="Touchpad">
+    <div>
+      <div id="padLabel">TAP TO START</div>
+      <div id="padHelp">Tap = click · Drag = fine move<br>Hold = recenter</div>
+    </div>
+    <div id="touchDot"></div>
+    <div id="holdRing"></div>
+  </section>
+
+  <div id="blocker"><div><h1 id="blockTitle"></h1><p id="blockText"></p></div></div>
+
+<script type="module">
+import { createTiltClassifier } from "/tilt.js";
+import { topEdgeVector, yawOf, angleDiff, averageDirection } from "/pointer.js";
+
+const $ = (id) => document.getElementById(id);
+const pad = $("pad"), padLabel = $("padLabel"), touchDot = $("touchDot"), holdRing = $("holdRing");
+
+const room = new URLSearchParams(location.search).get("room");
+// Yes/No page: point 15 deg left/right of where you recentered; back within 7 deg to deselect.
+const classifier = createTiltClassifier({ enter: 15, exit: 7 });
+const sid = Math.random().toString(36).slice(2, 8); // changes on reload -> laptop knows to recalibrate
+
+const HOLD_MS = 700;        // hold this long without moving = recenter
+const DRAG_START_PX = 8;    // finger must move this far before it counts as a drag (not a tap)
+const TAP_MAX_MS = 450;     // longer than this without moving = not a click
+
+let ws, wsOpen = false, retry = 0;
+let running = false, gotEvents = false, wakeLock = null;
+let neutral = null, smoothed = 0, lastHeading = null;
+let lastTiltSent = 0, lastPointSent = 0;
+const recent = [];          // [{t, v}] last ~0.5 s of top-edge directions
+
+const setHint = (t) => { $("hint").textContent = t; };
+const round = (v) => v && v.map((x) => Math.round(x * 1e4) / 1e4);
+const buzz = (p) => navigator.vibrate?.(p);
+
+// ---------- guards ----------
+function block(title, text) {
+  $("blockTitle").textContent = title; $("blockText").textContent = text;
+  $("blocker").classList.add("on");
+}
+if (!room) block("No room", "Scan the QR code shown on the laptop.");
+else if (!window.isSecureContext) block("Needs HTTPS", "Motion sensors only work on secure pages. Open this page through your https tunnel URL.");
+$("roomLabel").textContent = room || "";
+
+// ---------- websocket (auto reconnect) ----------
+function setStatus(ok, text) { $("status").dataset.ok = String(ok); $("statusText").textContent = text; }
+function connect() {
+  if (!room) return;
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(`${proto}//${location.host}/ws?role=phone&room=${encodeURIComponent(room)}`);
+  ws.onopen = () => { wsOpen = true; retry = 0; setStatus("wait", "Connected · waiting for laptop"); };
+  ws.onmessage = (e) => {
+    let msg; try { msg = JSON.parse(e.data); } catch { return; }
+    if (msg.role !== "app") return;
+    if (msg.type === "peer-joined") setStatus(true, "Connected to laptop");
+    if (msg.type === "peer-left") setStatus("wait", "Connected · laptop page closed");
+  };
+  ws.onclose = () => {
+    wsOpen = false;
+    setStatus(false, "Reconnecting…");
+    setTimeout(connect, Math.min(500 * 2 ** retry++, 8000));
+  };
+  ws.onerror = () => ws.close();
+}
+function send(obj) { if (wsOpen) ws.send(JSON.stringify(obj)); }
+connect();
+
+// ---------- motion ----------
+async function startMotion() {
+  if (running) return true;
+  // iOS 13+ requires an explicit permission request from a user gesture.
+  if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+    let res;
+    try { res = await DeviceOrientationEvent.requestPermission(); } catch { res = "denied"; }
+    if (res !== "granted") { setHint("Motion access denied. Reload the page and allow it."); return false; }
+  }
+  window.addEventListener("deviceorientation", onOrientation);
+  running = true;
+  requestWakeLock();
+  padLabel.textContent = "TOUCHPAD";
+  $("startLabel").textContent = "Motion on";
+  $("startSub").textContent = "Aim the top edge at the screen";
+  $("startBtn").disabled = true;
+  setHint("Aim the top edge of the phone at the laptop screen.");
+  buzz(20);
+  setTimeout(() => { if (!gotEvents) setHint("No motion data. Check this browser is allowed to use motion sensors."); }, 2000);
+  return true;
+}
+
+function onOrientation(e) {
+  if (e.alpha == null || e.beta == null || e.gamma == null) return;
+  gotEvents = true;
+  const v = topEdgeVector(e.alpha, e.beta, e.gamma);
+  const now = performance.now();
+  recent.push({ t: now, v });
+  while (recent.length && now - recent[0].t > 500) recent.shift();
+
+  // 2D: stream the raw direction; the laptop maps it to the screen with its calibration.
+  if (now - lastPointSent > 16) {
+    lastPointSent = now;
+    send({ type: "point", v: round(v), sid });
+  }
+
+  // 1D (Yes/No page): left/right of where you recentered.
+  lastHeading = yawOf(v);
+  if (neutral === null) { neutral = lastHeading; smoothed = 0; }
+  smoothed += 0.35 * (angleDiff(lastHeading, neutral) - smoothed);
+  const before = classifier.state, after = classifier.update(smoothed);
+  if (after !== before) {
+    pad.dataset.state = after;
+    send({ type: "highlight", value: after });
+  }
+  if (now - lastTiltSent > 60) {
+    lastTiltSent = now;
+    send({ type: "tilt", value: Math.round(smoothed) });
+  }
+
+  const angle = screen.orientation?.angle ?? window.orientation ?? 0;
+  if (angle !== 0) setHint("Rotate your phone to portrait.");
+}
+
+async function requestWakeLock() {
+  try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && running) requestWakeLock();
+});
+
+// Where the phone pointed just before time t (averaged over 100 ms: a tap jolts the phone).
+function aimBefore(t) {
+  return averageDirection(recent.filter((s) => s.t <= t && t - s.t < 100).map((s) => s.v)) || recent.at(-1)?.v || null;
+}
+
+function recenter(v) {
+  if (lastHeading !== null) { neutral = lastHeading; smoothed = 0; }
+  classifier.reset();
+  pad.dataset.state = "center";
+  send({ type: "highlight", value: "center" });
+  send({ type: "recenter", v: round(v || recent.at(-1)?.v || null), sid });
+  buzz([20, 40, 20]);
+  setHint("Recentered: the cursor is now where you were aiming.");
+}
+
+// ---------- top controls ----------
+$("startBtn").addEventListener("click", startMotion);
+$("calibBtn").addEventListener("click", async () => {
+  // Open calibration on the laptop straight away, then make sure motion is on
+  // (the first tap on iOS doubles as the motion-permission gesture).
+  send({ type: "calibrate", sid });
+  buzz(25);
+  if (await startMotion()) setHint("Calibration opened on the laptop: point at each dot and tap the touchpad.");
+});
+$("recenterBtn").addEventListener("click", async () => {
+  if (!(await startMotion())) return;
+  // aim from just before the finger touched the button
+  recenter(aimBefore(performance.now() - 150));
+});
+
+// ---------- touchpad ----------
+// tap = click (aimed where the phone pointed at touch-down), drag = fine cursor move,
+// hold still = recenter. Only the first finger counts.
+let touch = null; // { id, x0, y0, x, y, t0, aim, dragging, held, timer, pendX, pendY }
+let dragFlush = null;
+
+function flushDrag() {
+  dragFlush = null;
+  if (!touch || (!touch.pendX && !touch.pendY)) return;
+  send({ type: "drag", dx: Math.round(touch.pendX * 10) / 10, dy: Math.round(touch.pendY * 10) / 10, w: pad.clientWidth });
+  touch.pendX = 0; touch.pendY = 0;
+}
+
+pad.addEventListener("pointerdown", async (e) => {
+  if (touch) return;
+  if (!running) { await startMotion(); return; }
+  try { pad.setPointerCapture(e.pointerId); } catch {} // keep getting moves if the finger slides off the pad
+  const r = pad.getBoundingClientRect();
+  touch = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t0: performance.now(),
+            aim: aimBefore(performance.now()), dragging: false, held: false, pendX: 0, pendY: 0 };
+  touchDot.style.left = e.clientX - r.left + "px"; touchDot.style.top = e.clientY - r.top + "px";
+  touchDot.className = "on";
+  pad.classList.add("pressed");
+  holdRing.classList.add("charging");
+  touch.timer = setTimeout(() => {
+    if (!touch || touch.dragging) return;
+    touch.held = true;
+    holdRing.classList.remove("charging");
+    recenter(touch.aim);
+  }, HOLD_MS);
+});
+
+pad.addEventListener("pointermove", (e) => {
+  if (!touch || e.pointerId !== touch.id) return;
+  const r = pad.getBoundingClientRect();
+  touchDot.style.left = e.clientX - r.left + "px"; touchDot.style.top = e.clientY - r.top + "px";
+  if (!touch.dragging && !touch.held && Math.hypot(e.clientX - touch.x0, e.clientY - touch.y0) > DRAG_START_PX) {
+    touch.dragging = true;
+    clearTimeout(touch.timer);
+    holdRing.classList.remove("charging");
+    touchDot.classList.add("drag");
+    touch.x = e.clientX; touch.y = e.clientY; // start moving from here so there's no jump
+    return;
+  }
+  if (touch.dragging) {
+    touch.pendX += e.clientX - touch.x; touch.pendY += e.clientY - touch.y;
+    touch.x = e.clientX; touch.y = e.clientY;
+    dragFlush ??= setTimeout(flushDrag, 16);
+  }
+});
+
+function endTouch(e, cancelled) {
+  if (!touch || e.pointerId !== touch.id) return;
+  clearTimeout(touch.timer);
+  flushDrag();
+  const isTap = !cancelled && !touch.dragging && !touch.held && performance.now() - touch.t0 < TAP_MAX_MS;
+  if (isTap) {
+    send({ type: "click", v: round(touch.aim), sid });
+    buzz(30);
+  }
+  touch = null;
+  touchDot.className = "";
+  pad.classList.remove("pressed");
+  holdRing.classList.remove("charging");
+}
+pad.addEventListener("pointerup", (e) => endTouch(e, false));
+pad.addEventListener("pointercancel", (e) => endTouch(e, true));
+
+setHint(room ? "Tap Start motion (or the touchpad) to begin." : "");
+</script>
+</body>
+</html>
