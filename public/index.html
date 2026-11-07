@@ -327,9 +327,15 @@
     }
     loadDownloads();
 
-    if (location.protocol === "https:") {
-      document.getElementById("httpsNote").textContent = "You're on HTTPS, so the QR code on each demo works as is. Scan it with your phone.";
-    }
+    // Static hosting (e.g. Vercel) has no relay, so phones can't pair with the demos here.
+    fetch("/healthz").then((r) => r.ok ? r.text() : "").catch(() => "").then((t) => {
+      const note = document.getElementById("httpsNote");
+      if (t.trim() !== "ok") {
+        note.innerHTML = "This copy of the site has no relay, so the demos only work with your mouse here. To use your phone, run the desktop app: it serves these demos too, at the https link it prints (open <code>/play</code> there).";
+      } else if (location.protocol === "https:") {
+        note.textContent = "You're on HTTPS, so the QR code on each demo works as is. Scan it with your phone.";
+      }
+    });
   </script>
 </body>
 </html>

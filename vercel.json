@@ -1,0 +1,12 @@
+{
+  "framework": null,
+  "installCommand": "echo prebuilt",
+  "buildCommand": "echo prebuilt",
+  "outputDirectory": "site",
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/yesno", "destination": "/app.html" },
+    { "source": "/downloads", "destination": "/downloads/index.json" },
+    { "source": "/downloads/", "destination": "/downloads/index.json" }
+  ]
+}
