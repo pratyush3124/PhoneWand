@@ -1,15 +1,21 @@
 {
   "name": "mobile-remote",
   "version": "1.0.0",
-  "description": "Use your phone's tilt and a big button to control a web app on your laptop",
+  "description": "Use your phone as a Wii-style pointer for a web app, or for your whole desktop mouse",
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test.js"
+    "test": "node test.js",
+    "mouse": "node desktop/remote-mouse.js"
   },
   "dependencies": {
     "qrcode-generator": "^2.0.4",
     "ws": "^8.22.1"
+  },
+  "optionalDependencies": {
+    "@nut-tree-fork/libnut-darwin": "^2.7.5",
+    "@nut-tree-fork/libnut-linux": "^2.7.5",
+    "@nut-tree-fork/libnut-win32": "^2.7.5"
   }
 }

@@ -331,3 +331,150 @@ test("relays touchpad drag and calibrate from the phone", async () => {
   await nothing(phone, (m) => m.type === "calibrate");
   phone.close(); app.close();
 });
+
+// ---------- desktop mouse helper ----------
+import { createDesktopController } from "./desktop/controller.js";
+
+function fakeDesktop(screen = { width: 1600, height: 900 }) {
+  const m = { pos: { x: 0, y: 0 }, moves: 0, clicks: [], t: 0, logs: [], scrolls: [], typed: [], keys: [] };
+  m.ctl = createDesktopController({
+    screen,
+    now: () => m.t,
+    log: (s) => m.logs.push(s),
+    mouse: {
+      move(x, y) { m.pos = { x, y }; m.moves++; },
+      click() { m.clicks.push({ ...m.pos }); },
+      getPos: () => ({ ...m.pos }),
+      scroll(dx, dy) { m.scrolls.push([dx, dy]); },
+      type(text) { m.typed.push(text); },
+      key(name, mods) { m.keys.push([name, ...mods].join("+")); },
+    },
+  });
+  // stream the phone pointing at screen fraction (fx, fy) for `ms`
+  m.aim = (dir, ms = 1500, sid = "s1") => {
+    for (let end = m.t + ms; m.t < end; m.t += 16) m.ctl.handlers.onPoint({ v: dir, sid });
+  };
+  return m;
+}
+const calibrate = (d, at, sid = "s1") => {
+  for (const [x, y] of CORNER_TARGETS) {
+    d.aim(at(x, y), 100, sid);
+    d.ctl.handlers.onClick({ v: at(x, y), sid });
+  }
+};
+
+test("desktop helper: calibrate with the real cursor, then point and click anywhere on screen", () => {
+  const at = makeScreen({ yaw: 30, tilt: 10 });
+  const d = fakeDesktop();
+  d.aim(at(0.5, 0.5), 100);
+  assert.equal(d.ctl.calibrating, 0, "first contact starts calibration");
+  assert.ok(Math.hypot(d.pos.x - 0.06 * 1600, d.pos.y - 0.08 * 900) <= 11, "cursor parked on the top-left target");
+  calibrate(d, at);
+  assert.equal(d.ctl.calibrated, true);
+  assert.equal(d.ctl.calibrating, null);
+  assert.equal(d.clicks.length, 0, "calibration taps don't click");
+
+  d.aim(at(0.3, 0.6));
+  close(d.pos.x, 480, 2, "x"); close(d.pos.y, 540, 2, "y");
+  d.ctl.handlers.onClick({ v: at(0.3, 0.6), sid: "s1" });
+  assert.deepEqual(d.clicks.at(-1), { x: 480, y: 540 });
+
+  // a tap aimed far from the shown cursor clicks where the phone pointed at touch-down
+  d.ctl.handlers.onClick({ v: at(0.9, 0.1), sid: "s1" });
+  close(d.clicks.at(-1).x, 1440, 1); close(d.clicks.at(-1).y, 90, 1);
+
+  // pointing off screen keeps the cursor on the edge
+  d.aim(at(1.4, -0.3));
+  assert.deepEqual(d.pos, { x: 1599, y: 0 });
+
+  // touchpad drag: a full-width swipe moves half the screen
+  d.aim(at(0.3, 0.6));
+  d.ctl.handlers.onDrag({ dx: 180, dy: 36, w: 360 });
+  close(d.pos.x, 480 + 400, 2); close(d.pos.y, 540 + 80, 2);
+
+  // recenter: drift fixed, nudge cleared
+  const drift = (fx, fy) => rotateYaw(at(fx, fy), -8);
+  d.ctl.handlers.onRecenter({ v: drift(0.5, 0.5), sid: "s1" });
+  d.aim(drift(0.25, 0.5));
+  close(d.pos.x, 400, 25, "recentered x"); close(d.pos.y, 450, 25, "recentered y");
+});
+
+test("desktop helper: moving the real mouse pauses the phone, and a tap clicks where the mouse is", () => {
+  const at = makeScreen({});
+  const d = fakeDesktop();
+  calibrate(d, at);
+  d.aim(at(0.5, 0.5));
+  d.pos = { x: 100, y: 700 }; // the user grabs the mouse
+  const moves = d.moves;
+  d.aim(at(0.8, 0.2), 500);
+  assert.equal(d.moves, moves, "phone doesn't move the cursor while the user is");
+  d.ctl.handlers.onClick({ v: at(0.8, 0.2), sid: "s1" });
+  assert.deepEqual(d.clicks.at(-1), { x: 100, y: 700 });
+  d.aim(at(0.8, 0.2), 2500);
+  close(d.pos.x, 1280, 2, "phone takes over again"); close(d.pos.y, 180, 2);
+
+  d.ctl.setPaused(true);
+  d.aim(at(0.2, 0.2), 500);
+  close(d.pos.x, 1280, 2, "paused");
+  d.ctl.setPaused(false);
+  d.aim(at(0.2, 0.2));
+  close(d.pos.x, 320, 2, "resumed");
+});
+
+test("desktop helper: phone reload or bad corners ask for calibration again", () => {
+  const at = makeScreen({});
+  const d = fakeDesktop();
+  calibrate(d, at);
+  assert.equal(d.ctl.calibrated, true);
+  d.aim(at(0.5, 0.5), 100, "s2"); // phone page reloaded: new sensor session
+  assert.equal(d.ctl.calibrated, false);
+  assert.equal(d.ctl.calibrating, 0);
+  for (let i = 0; i < 4; i++) d.ctl.handlers.onClick({ v: at(0.5, 0.5), sid: "s2" }); // same spot 4 times
+  assert.equal(d.ctl.calibrating, 0, "bad corners restart calibration");
+  assert.ok(d.logs.some((l) => /too close|wrong order/.test(l)), "says why");
+  calibrate(d, at, "s2");
+  assert.equal(d.ctl.calibrated, true);
+  d.ctl.handlers.onCalibrate({ sid: "s2" }); // Calibrate button on the phone
+  assert.equal(d.ctl.calibrating, 0);
+  d.ctl.cancelCalibration();
+  assert.equal(d.ctl.calibrated, true, "cancel keeps the old calibration");
+  d.aim(at(0.7, 0.4), 1500, "s2");
+  close(d.pos.x, 1120, 2); close(d.pos.y, 360, 2);
+});
+
+test("desktop helper: scroll, text and keys from the phone", () => {
+  const d = fakeDesktop();
+  const h = d.ctl.handlers;
+  h.onScroll({ dx: 0, dy: -20, w: 360 }); // fingers move up = page goes down
+  h.onScroll({ dx: 10, dy: 0, w: 360 }); // fingers move right = page goes left
+  assert.deepEqual(d.scrolls, [[-0, 50], [-25, -0]]);
+  h.onText("héllo 😀");
+  h.onText("");
+  h.onText(42);
+  assert.deepEqual(d.typed, ["héllo 😀"]);
+  h.onKey({ key: "Enter", mods: [] });
+  h.onKey({ key: "backspace", repeat: 3 });
+  h.onKey({ key: "c", mods: ["ctrl", "ctrl", "hyper"] });
+  h.onKey({ key: "backspace", repeat: 1e9 });
+  h.onKey({ key: "rm -rf" }); // not a key
+  h.onKey({ key: " " }); // whitespace character: use "space"
+  assert.equal(d.keys.length, 1 + 3 + 1 + 200);
+  assert.deepEqual(d.keys.slice(0, 5), ["enter", "backspace", "backspace", "backspace", "c+ctrl"]);
+  d.ctl.setPaused(true);
+  h.onText("nope"); h.onKey({ key: "enter" }); h.onScroll({ dx: 0, dy: 5, w: 360 });
+  assert.equal(d.typed.length, 1); assert.equal(d.scrolls.length, 2); assert.equal(d.keys.length, 205);
+});
+
+test("relays scroll, text and key messages from the phone only", async () => {
+  const r = room();
+  const app = await connect("app", r);
+  const phone = await connect("phone", r);
+  await next(app, (m) => m.type === "peer-joined");
+  for (const m of [{ type: "scroll", dx: 1, dy: -2, w: 360 }, { type: "text", text: "hi é" }, { type: "key", key: "enter", mods: ["ctrl"] }]) {
+    phone.send(JSON.stringify(m));
+    assert.deepEqual(await next(app, (x) => x.type === m.type), m);
+  }
+  app.send(JSON.stringify({ type: "text", text: "x" }));
+  await nothing(phone, (m) => m.type === "text");
+  phone.close(); app.close();
+});

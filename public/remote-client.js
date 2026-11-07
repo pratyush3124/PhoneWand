@@ -10,6 +10,9 @@
 //     onPoint: ({ v, sid }) => { /* 2D: top-edge direction [x,y,z], ~60/s; see pointer.js */ },
 //     onRecenter: ({ v, sid }) => { /* phone long-pressed: treat v as "pointing at the middle" */ },
 //     onDrag: ({ dx, dy, w }) => { /* finger moved on the touchpad by dx,dy px (pad is w px wide) */ },
+//     onScroll: ({ dx, dy, w }) => { /* scroll gesture: fingers moved dx,dy px (dy > 0 = fingers moved down) */ },
+//     onText: (text) => { /* text typed on the phone keyboard */ },
+//     onKey: ({ key, mods }) => { /* special key, e.g. "enter", "backspace", "left"; or a character with mods ["ctrl"] */ },
 //     onCalibrate: () => { /* Calibrate button pressed on the phone */ },
 //     onStatus: ({ server, phone }) => { /* connection state */ },
 //   });
@@ -32,6 +35,9 @@ export function connectRemote({
   onPoint,
   onRecenter,
   onDrag,
+  onScroll,
+  onText,
+  onKey,
   onCalibrate,
   onStatus,
 }) {
@@ -74,6 +80,15 @@ export function connectRemote({
           break;
         case "drag":
           if (Number.isFinite(msg.dx) && Number.isFinite(msg.dy)) onDrag?.(msg);
+          break;
+        case "scroll":
+          if (Number.isFinite(msg.dx) && Number.isFinite(msg.dy)) onScroll?.(msg);
+          break;
+        case "text":
+          if (typeof msg.text === "string" && msg.text) onText?.(msg.text);
+          break;
+        case "key":
+          if (typeof msg.key === "string" && msg.key) onKey?.({ key: msg.key, mods: Array.isArray(msg.mods) ? msg.mods : [], repeat: msg.repeat });
           break;
         case "calibrate":
           onCalibrate?.(msg);

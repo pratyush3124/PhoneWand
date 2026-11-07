@@ -97,7 +97,7 @@ wss.on("connection", (ws, req) => {
     }
     // Only the phone sends control messages; relay to the app side only.
     if (ws.role !== "phone") return;
-    if (!["highlight", "click", "tilt", "point", "recenter", "drag", "calibrate"].includes(msg.type)) return;
+    if (!["highlight", "click", "tilt", "point", "recenter", "drag", "calibrate", "scroll", "text", "key"].includes(msg.type)) return;
     const out = JSON.stringify(msg);
     for (const peer of r.clients) {
       if (peer !== ws && peer.role === "app" && peer.readyState === 1) peer.send(out);

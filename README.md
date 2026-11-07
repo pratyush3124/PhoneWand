@@ -9,8 +9,8 @@ Two demo pages:
 
 The phone screen is split in two:
 
-- **Top half (controls):** **Calibrate** (opens the 4-corner calibration on the laptop right away), **Recenter**, and **Start motion**.
-- **Bottom half (touchpad):** **tap** = click, **drag** = move the cursor precisely (a full-width swipe moves it half the screen), **hold 0.7 s** = recenter.
+- **Top half (controls):** **Calibrate** (opens the 4-corner calibration on the laptop right away), **Recenter**, **Start motion**, and **Keyboard**.
+- **Bottom half (touchpad):** **tap** = click, **drag** = move the cursor precisely (a full-width swipe moves it half the screen), **hold 0.7 s** = recenter, **two fingers** or the **right-edge strip** = scroll (scroll and keyboard are handled by the desktop helper; web pages get them as `onScroll` / `onText` / `onKey`).
 
 ```
 Phone (/phone) ──WebSocket──▶ server.js (relay) ──WebSocket──▶ Web page (/play or /)
@@ -68,6 +68,31 @@ On the Yes/No page, pointing about 15° left or right of where you started selec
 
 On the Yes/No page: `←` highlights Yes, `→` highlights No, `↓` clears, `Enter` clicks. In the playground everything also works with the mouse, and the Keyboard mode accepts real typing.
 
+## Control your whole desktop (any browser tab)
+
+The demo pages only react to the phone because they load `remote-client.js`. To use the phone as a mouse everywhere (YouTube, Gmail, the tab bar, other apps), run the desktop helper. It joins a room like a web page would, but it moves and clicks your **real mouse pointer**.
+
+1. Start the relay and a tunnel as above (`npm start`, then `cloudflared tunnel --url http://localhost:8080`).
+2. In another terminal:
+
+   ```bash
+   npm run mouse -- --public https://<your-tunnel>.trycloudflare.com
+   ```
+
+3. Scan the QR code it prints, then tap **Start motion** on the phone.
+4. Calibrate: the helper puts the mouse pointer in each corner of the screen, wiggling it slightly. Aim the phone's top edge at it and tap the touchpad, 4 times.
+
+Then the pointer follows the phone. **Tap** = left click, **drag** = fine move, **hold** = recenter (aim at the middle of the screen first), **Calibrate** on the phone = redo the corners.
+
+- **Scroll:** drag with **two fingers** anywhere on the touchpad, or with one finger in the **strip on its right edge**. It scrolls like a phone: move your fingers up and the page moves up.
+- **Keyboard:** tap **Keyboard** on the phone and type. Text goes to whatever has focus on the laptop. Autocorrect, emoji and accented letters work (on Windows, non-ASCII text is typed by a small PowerShell helper, `desktop/win-unicode.ps1`). The key row has Esc, Tab, arrows, Backspace, Home/End, PgUp/PgDn and Enter. **Ctrl / Alt / Shift** apply to the next key or letter, so Ctrl then `c` = copy.
+
+- Touch the real mouse and the phone backs off for 1.5 s, so they don't fight. While it's backed off, a phone tap clicks wherever the mouse pointer is.
+- Keys in the helper's terminal: `c` calibrate, `p` pause/resume, `Esc` cancel calibration, `q` quit.
+- Options: `--server URL` (relay to connect to, default `http://localhost:8080`), `--room CODE` (reuse a room), `--smooth light|medium|strong`.
+- It uses the primary monitor only.
+- The mouse library (`@nut-tree-fork/libnut-*`) is an optional native dependency with prebuilt binaries for Windows, macOS and Linux (X11). On macOS, give your terminal Accessibility permission (System Settings → Privacy & Security → Accessibility). On Windows, it can't click inside windows running as administrator unless the helper's terminal is also running as administrator.
+
 ## Use it in your own web app
 
 Serve this project's server (or copy its relay), then on your page:
@@ -115,7 +140,7 @@ For a 2D cursor, use [public/pointer.js](public/pointer.js): collect 4 `click.v`
 npm test
 ```
 
-Starts the server on a random port and checks static files, path-traversal blocking, relaying, room isolation, room-code validation, the client cap, the left/right classifier, and the 2D pointer math (including a simulated screen at different angles, drift + recenter, and rejecting bad corner sets).
+Starts the server on a random port and checks static files, path-traversal blocking, relaying, room isolation, room-code validation, the client cap, the left/right classifier, the 2D pointer math (including a simulated screen at different angles, drift + recenter, and rejecting bad corner sets), and the desktop helper's logic with a fake mouse.
 
 ## Troubleshooting
 
