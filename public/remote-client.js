@@ -14,6 +14,7 @@
 //     onText: (text) => { /* text typed on the phone keyboard */ },
 //     onKey: ({ key, mods }) => { /* special key, e.g. "enter", "backspace", "left"; or a character with mods ["ctrl"] */ },
 //     onCalibrate: () => { /* Calibrate button pressed on the phone */ },
+//     onPower: (on) => { /* phone's main switch: false = ignore the phone until it's back on */ },
 //     onStatus: ({ server, phone }) => { /* connection state */ },
 //   });
 //   remote.close(); // when done
@@ -38,6 +39,7 @@ export function connectRemote({
   onScroll,
   onText,
   onKey,
+  onPower,
   onCalibrate,
   onStatus,
 }) {
@@ -89,6 +91,9 @@ export function connectRemote({
           break;
         case "key":
           if (typeof msg.key === "string" && msg.key) onKey?.({ key: msg.key, mods: Array.isArray(msg.mods) ? msg.mods : [], repeat: msg.repeat });
+          break;
+        case "power":
+          if (typeof msg.on === "boolean") onPower?.(msg.on);
           break;
         case "calibrate":
           onCalibrate?.(msg);

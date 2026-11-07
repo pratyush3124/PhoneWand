@@ -9,7 +9,7 @@ Two demo pages:
 
 The phone screen is split in two:
 
-- **Top half (controls):** **Calibrate** (opens the 4-corner calibration on the laptop right away), **Recenter**, **Start motion**, and **Keyboard**.
+- **Top half (controls):** **Calibrate** (opens the 4-corner calibration on the laptop right away), the big **ON / OFF** switch (while off, the phone sends nothing, so the laptop ignores it), **Recenter**, **Start motion**, and **Keyboard**.
 - **Bottom half (touchpad):** **tap** = click, **drag** = move the cursor precisely (a full-width swipe moves it half the screen), **hold 0.7 s** = recenter, **two fingers** or the **right-edge strip** = scroll (scroll and keyboard are handled by the desktop helper; web pages get them as `onScroll` / `onText` / `onKey`).
 
 ```
@@ -85,7 +85,7 @@ The demo pages only react to the phone because they load `remote-client.js`. To 
 Then the pointer follows the phone. **Tap** = left click, **drag** = fine move, **hold** = recenter (aim at the middle of the screen first), **Calibrate** on the phone = redo the corners.
 
 - **Scroll:** drag with **two fingers** anywhere on the touchpad, or with one finger in the **strip on its right edge**. It scrolls like a phone: move your fingers up and the page moves up.
-- **Keyboard:** tap **Keyboard** on the phone and type. Text goes to whatever has focus on the laptop. Autocorrect, emoji and accented letters work (on Windows, non-ASCII text is typed by a small PowerShell helper, `desktop/win-unicode.ps1`). The key row has Esc, Tab, arrows, Backspace, Home/End, PgUp/PgDn and Enter. **Ctrl / Alt / Shift** apply to the next key or letter, so Ctrl then `c` = copy.
+- **Keyboard:** tap **Keyboard** on the phone and type. Text goes to whatever has focus on the laptop. Autocorrect, emoji and accented letters work (on Windows, non-ASCII text is typed by a small PowerShell helper, `desktop/win-unicode.ps1`). The key row has Esc, Tab, arrows, Backspace, Home/End, PgUp/PgDn and Enter. **Ctrl / Alt / Shift** apply to the next key or letter, so Ctrl then `c` = copy. Close it with **Close keyboard** at the top, or the phone's Back button.
 
 - Touch the real mouse and the phone backs off for 1.5 s, so they don't fight. While it's backed off, a phone tap clicks wherever the mouse pointer is.
 - Keys in the helper's terminal: `c` calibrate, `p` pause/resume, `Esc` cancel calibration, `q` quit.

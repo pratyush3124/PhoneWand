@@ -478,3 +478,40 @@ test("relays scroll, text and key messages from the phone only", async () => {
   await nothing(phone, (m) => m.type === "text");
   phone.close(); app.close();
 });
+
+test("desktop helper: the phone's on/off switch silences everything, separately from the terminal pause", () => {
+  const at = makeScreen({});
+  const d = fakeDesktop();
+  calibrate(d, at);
+  d.aim(at(0.5, 0.5));
+  const h = d.ctl.handlers;
+  h.onPower(false);
+  assert.equal(d.ctl.phoneOff, true);
+  const moves = d.moves;
+  d.aim(at(0.1, 0.1), 500);
+  h.onClick({ v: at(0.1, 0.1), sid: "s1" });
+  h.onScroll({ dx: 0, dy: 10, w: 360 }); h.onText("x"); h.onKey({ key: "enter" });
+  h.onCalibrate({ sid: "s1" });
+  assert.equal(d.moves, moves); assert.equal(d.clicks.length, 0);
+  assert.equal(d.scrolls.length + d.typed.length + d.keys.length, 0);
+  assert.equal(d.ctl.calibrating, null);
+  h.onPower(true);
+  d.aim(at(0.1, 0.1));
+  close(d.pos.x, 160, 2, "back on");
+  // terminal pause: a phone reconnecting (power on again) doesn't undo it, and taps don't click
+  d.ctl.setPaused(true);
+  h.onPower(true);
+  h.onClick({ v: at(0.1, 0.1), sid: "s1" });
+  assert.equal(d.clicks.length, 0);
+  assert.equal(d.ctl.paused, true);
+});
+
+test("relays the power switch", async () => {
+  const r = room();
+  const app = await connect("app", r);
+  const phone = await connect("phone", r);
+  await next(app, (m) => m.type === "peer-joined");
+  phone.send(JSON.stringify({ type: "power", on: false, sid: "a" }));
+  assert.deepEqual(await next(app, (m) => m.type === "power"), { type: "power", on: false, sid: "a" });
+  phone.close(); app.close();
+});

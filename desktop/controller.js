@@ -52,7 +52,9 @@ export function createDesktopController({
   let cursor = null; // where we last put the cursor (px)
   let lastSet = null; // last position we gave mouse.move (rounded), to spot real mouse moves
   let userUntil = 0;
-  let paused = false;
+  let paused = false; // helper paused from its terminal
+  let phoneOff = false; // phone's main switch is off
+  const off = () => paused || phoneOff;
   let lastV = null;
 
   const clampX = (x) => Math.min(W - 1, Math.max(0, x));
@@ -67,7 +69,7 @@ export function createDesktopController({
 
   // True while the user is using the real mouse (or the helper is paused).
   function userHasMouse(t) {
-    if (paused) return true;
+    if (off()) return true;
     const p = mouse.getPos();
     if (lastSet && Math.hypot(p.x - lastSet.x, p.y - lastSet.y) > USER_MOVE_PX) {
       if (t >= userUntil) log("Mouse moved by hand: phone pointing paused");
@@ -158,7 +160,7 @@ export function createDesktopController({
       }
     }
     if (calib) {
-      if (!paused) showTarget(t);
+      if (!off()) showTarget(t);
       return;
     }
     if (!calibration || userHasMouse(t)) return;
@@ -169,6 +171,7 @@ export function createDesktopController({
   }
 
   function onClick(msg) {
+    if (off()) return;
     const v = msg.v || lastV;
     if (calib) return calibrationTap(v, msg.sid ?? seenSid);
     if (!calibration) return startCalibration();
@@ -188,7 +191,7 @@ export function createDesktopController({
   }
 
   function onDrag(msg) {
-    if (!calibration || calib || !gyroPos || paused) return;
+    if (!calibration || calib || !gyroPos || off()) return;
     const w = msg.w > 50 ? msg.w : 360;
     const k = (DRAG_GAIN * W) / w; // phone px -> screen px
     nudge = [nudge[0] + msg.dx * k, nudge[1] + msg.dy * k];
@@ -206,23 +209,32 @@ export function createDesktopController({
     log("Recentered: the cursor is now in the middle of the screen.");
   }
 
+  // The phone's main on/off switch.
+  function onPower(on) {
+    if (on === !phoneOff) return;
+    phoneOff = !on;
+    if (on) { resetSmoothing(); userUntil = 0; lastSet = null; }
+    log(on ? "Phone switched on." : "Phone switched off: ignoring it until it's switched back on.");
+  }
+
   function onCalibrate() {
+    if (off()) return log(paused ? "Paused: press p to resume before calibrating." : "The phone is switched off.");
     startCalibration();
   }
 
   // Natural scrolling, like a phone: fingers move up = the page moves up (you read further down).
   function onScroll(msg) {
-    if (paused || calib) return;
+    if (off() || calib) return;
     mouse.scroll(-msg.dx * SCROLL_GAIN, -msg.dy * SCROLL_GAIN);
   }
 
   function onText(text) {
-    if (paused || typeof text !== "string" || !text) return;
+    if (off() || typeof text !== "string" || !text) return;
     mouse.type(text.slice(0, MAX_TEXT));
   }
 
   function onKey({ key, mods = [], repeat = 1 }) {
-    if (paused || typeof key !== "string") return;
+    if (off() || typeof key !== "string") return;
     key = key.toLowerCase();
     if (!KEYS.has(key) && !(key.length === 1 && key.trim())) return;
     const m = [...new Set(mods)].filter((x) => MODS.has(x));
@@ -230,8 +242,8 @@ export function createDesktopController({
     for (let i = 0; i < n; i++) mouse.key(key, m);
   }
 
-  return {
-    handlers: { onPoint, onClick, onDrag, onRecenter, onCalibrate, onScroll, onText, onKey },
+  const api = {
+    handlers: { onPoint, onClick, onDrag, onRecenter, onCalibrate, onScroll, onText, onKey, onPower },
     startCalibration: onCalibrate,
     cancelCalibration() {
       if (!calib) return;
@@ -239,12 +251,15 @@ export function createDesktopController({
       log(calibration ? "Calibration cancelled: keeping the previous one." : "Calibration cancelled.");
     },
     setPaused(p) {
+      if (p === paused) return;
       paused = p;
       if (!p) { resetSmoothing(); userUntil = 0; lastSet = null; }
       log(p ? "Paused: the phone won't move the mouse." : "Resumed.");
     },
     get paused() { return paused; },
+    get phoneOff() { return phoneOff; },
     get calibrated() { return !!calibration; },
     get calibrating() { return calib ? calib.step : null; },
   };
+  return api;
 }

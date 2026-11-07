@@ -38,11 +38,23 @@
       font-weight: 700; font-size: 1.05rem; padding: 8px; min-height: 0; transition: transform .08s, filter .08s;
     }
     .ctl small { font-weight: 500; font-size: .75rem; color: var(--muted); text-align: center; }
+    /* the three small buttons share one layout (icon / one-line title / two-line note) so they line up */
+    .ctl .t { white-space: nowrap; font-size: clamp(.85rem, 4.3vw, 1.05rem); }
+    .ctl:not(.primary):not(.power) small { min-height: 2.6em; line-height: 1.3; display: flex; align-items: center; }
     .ctl:active { transform: scale(.97); filter: brightness(1.2); }
-    .ctl.primary { grid-column: 1 / -1; background: var(--accent); border-color: var(--accent); color: #fff; font-size: 1.3rem; }
+    .ctl.primary { grid-column: span 2; background: var(--accent); border-color: var(--accent); color: #fff; font-size: 1.3rem; }
     .ctl.primary small { color: rgb(255 255 255 / .8); }
     .ctl svg { width: 26px; height: 26px; }
     .ctl:disabled { opacity: .4; }
+    /* main on/off switch */
+    .ctl.power { gap: 2px; border-width: 2px; border-color: var(--good); color: var(--good); background: color-mix(in srgb, var(--good) 14%, var(--panel)); }
+    .ctl.power svg { width: 40px; height: 40px; }
+    .ctl.power .t { font-size: 1.25rem; font-weight: 800; letter-spacing: .06em; }
+    .ctl.power small { color: inherit; opacity: .85; }
+    body.off .ctl.power { border-color: var(--no); color: #ff8a7a; background: color-mix(in srgb, var(--no) 18%, var(--panel)); }
+    body.off .ctl:not(.power) { opacity: .35; pointer-events: none; }
+    body.off #pad { opacity: .45; }
+    body.off #padHelp, body.off #scrollStrip { visibility: hidden; }
     #hint { font-size: .8rem; color: var(--muted); text-align: center; min-height: 1.2em; margin: 0; }
 
     /* ---------- bottom half: touchpad ---------- */
@@ -86,17 +98,23 @@
     }
     #kb.open { display: flex; }
     #kb form { display: flex; gap: 8px; margin: 0; }
+    .kb-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .kb-head b { font-size: 1rem; }
+    #kbClose {
+      display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px;
+      background: var(--panel); padding: 7px 14px 7px 10px; font-weight: 700; font-size: .9rem; touch-action: manipulation;
+    }
+    #kbClose svg { width: 18px; height: 18px; }
     #kbInput {
       flex: 1; min-width: 0; font: inherit; font-size: 17px; color: var(--text); background: var(--panel);
       border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; -webkit-user-select: text; user-select: text;
     }
     #kbInput:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
     .keys { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-    .keys button, #kbDone {
+    .keys button {
       border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 9px 0;
       font-weight: 600; font-size: .9rem; touch-action: manipulation;
     }
-    #kbDone { padding: 0 14px; background: var(--accent); border-color: var(--accent); color: #fff; }
     .keys button:active { filter: brightness(1.3); }
     .keys button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
     #kbNote { margin: 0; font-size: .75rem; color: var(--muted); }
@@ -117,19 +135,24 @@
         Calibrate
         <small>Opens the 4-corner calibration on the laptop</small>
       </button>
+      <button class="ctl power" id="powerBtn" aria-pressed="true" aria-label="Remote on: tap to turn off">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 3v8"/><path d="M6.3 7.2a8 8 0 1 0 11.4 0"/></svg>
+        <span class="t" id="powerLabel">ON</span>
+        <small id="powerSub">Tap to turn off</small>
+      </button>
       <button class="ctl" id="recenterBtn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
-        Recenter
+        <span class="t">Recenter</span>
         <small>Aim at the middle</small>
       </button>
       <button class="ctl" id="startBtn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
-        <span id="startLabel">Start motion</span>
+        <span class="t" id="startLabel">Start motion</span>
         <small id="startSub">Once per page load</small>
       </button>
       <button class="ctl" id="kbBtn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>
-        Keyboard
+        <span class="t">Keyboard</span>
         <small>Type on the laptop</small>
       </button>
     </div>
@@ -147,9 +170,12 @@
   </section>
 
   <div id="kb" role="dialog" aria-label="Keyboard">
+    <div class="kb-head">
+      <b>Keyboard</b>
+      <button type="button" id="kbClose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>Close keyboard</button>
+    </div>
     <form id="kbForm" autocomplete="off">
       <input id="kbInput" type="text" enterkeyhint="send" autocomplete="off" spellcheck="false" placeholder="Type here: goes to the laptop" aria-label="Text to type on the laptop">
-      <button type="button" id="kbDone">Done</button>
     </form>
     <div class="keys">
       <button type="button" data-mod="ctrl" aria-pressed="false">Ctrl</button>
@@ -214,11 +240,11 @@ function connect() {
   if (!room) return;
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   ws = new WebSocket(`${proto}//${location.host}/ws?role=phone&room=${encodeURIComponent(room)}`);
-  ws.onopen = () => { wsOpen = true; retry = 0; setStatus("wait", "Connected · waiting for laptop"); };
+  ws.onopen = () => { wsOpen = true; retry = 0; setStatus("wait", "Connected · waiting for laptop"); sendPower(); };
   ws.onmessage = (e) => {
     let msg; try { msg = JSON.parse(e.data); } catch { return; }
     if (msg.role !== "app") return;
-    if (msg.type === "peer-joined") setStatus(true, "Connected to laptop");
+    if (msg.type === "peer-joined") { setStatus(true, "Connected to laptop"); sendPower(); }
     if (msg.type === "peer-left") setStatus("wait", "Connected · laptop page closed");
   };
   ws.onclose = () => {
@@ -228,7 +254,14 @@ function connect() {
   };
   ws.onerror = () => ws.close();
 }
-function send(obj) { if (wsOpen) ws.send(JSON.stringify(obj)); }
+// Main switch: while off, nothing but the switch state reaches the laptop.
+let powerOn = true;
+function send(obj) {
+  if (!wsOpen) return;
+  if (!powerOn && obj.type !== "power") return;
+  ws.send(JSON.stringify(obj));
+}
+function sendPower() { send({ type: "power", on: powerOn, sid }); }
 connect();
 
 // ---------- motion ----------
@@ -309,6 +342,25 @@ function recenter(v) {
 
 // ---------- top controls ----------
 $("startBtn").addEventListener("click", startMotion);
+$("powerBtn").addEventListener("click", () => setPower(!powerOn));
+function setPower(on) {
+  if (on === powerOn) return;
+  if (!on) {
+    // let go of anything in progress before going quiet
+    if (touch) { clearTimeout(touch.timer); touch = null; fingers.clear(); touchDot.className = ""; pad.classList.remove("pressed", "scrolling"); holdRing.classList.remove("charging"); }
+    closeKeyboard();
+  }
+  powerOn = on;
+  sendPower();
+  document.body.classList.toggle("off", !on);
+  $("powerBtn").setAttribute("aria-pressed", String(on));
+  $("powerBtn").setAttribute("aria-label", on ? "Remote on: tap to turn off" : "Remote off: tap to turn on");
+  $("powerLabel").textContent = on ? "ON" : "OFF";
+  $("powerSub").textContent = on ? "Tap to turn off" : "Tap to turn on";
+  padLabel.textContent = on ? (running ? "TOUCHPAD" : "TAP TO START") : "OFF";
+  setHint(on ? "Remote on." : "Remote off: the laptop ignores this phone until you turn it back on.");
+  buzz(on ? [20, 40, 20] : 60);
+}
 $("calibBtn").addEventListener("click", async () => {
   // Open calibration on the laptop straight away, then make sure motion is on
   // (the first tap on iOS doubles as the motion-permission gesture).
@@ -350,6 +402,7 @@ function startScrolling() {
 }
 
 pad.addEventListener("pointerdown", async (e) => {
+  if (!powerOn) return;
   if (touch) {
     // a second finger: switch to two-finger scrolling
     if (fingers.size === 1 && !touch.held) {
@@ -448,15 +501,26 @@ function sendKey(key) {
 function clearInput() { kbInput.value = ""; typed = ""; }
 
 $("kbBtn").addEventListener("click", () => {
+  if (kb.classList.contains("open")) return;
   kb.classList.add("open");
+  history.pushState({ kb: true }, "");
   kbInput.focus();
 });
-$("kbDone").addEventListener("click", () => {
+function hideKeyboard() {
+  if (!kb.classList.contains("open")) return false;
   kb.classList.remove("open");
   kbInput.blur();
   clearInput();
   for (const m of [...mods]) setMod(m, false);
-});
+  return true;
+}
+function closeKeyboard() {
+  // also drop the history entry added when it opened (its popstate finds it already closed)
+  if (hideKeyboard() && history.state?.kb) history.back();
+}
+$("kbClose").addEventListener("click", closeKeyboard);
+// The phone's Back button / gesture closes the keyboard instead of leaving the page.
+window.addEventListener("popstate", hideKeyboard);
 kb.querySelectorAll("[data-mod]").forEach((b) => {
   b.addEventListener("pointerdown", (e) => e.preventDefault()); // keep the soft keyboard open
   b.addEventListener("click", () => setMod(b.dataset.mod, !mods.has(b.dataset.mod)));
