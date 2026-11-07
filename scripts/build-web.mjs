@@ -16,7 +16,7 @@ fs.copyFileSync(path.join(root, "node_modules/qrcode-generator/dist/qrcode.mjs")
 const dl = path.join(site, "downloads");
 fs.mkdirSync(dl);
 const files = fs.readdirSync(path.join(root, "downloads"))
-  .filter((f) => /^mobile-remote-.*\.(zip|tar\.gz)$/.test(f))
+  .filter((f) => /^phonewand-.*\.(zip|tar\.gz)$/.test(f))
   .map((f) => {
     fs.copyFileSync(path.join(root, "downloads", f), path.join(dl, f));
     return { name: f, size: fs.statSync(path.join(dl, f)).size };

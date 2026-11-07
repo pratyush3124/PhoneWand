@@ -1,4 +1,4 @@
-# Mobile Remote: handoff notes
+# PhoneWand: handoff notes
 
 Goal: use a phone as a Wii-style controller for a web app on a laptop.
 The user aims the phone's TOP EDGE at the laptop screen. Two pages:

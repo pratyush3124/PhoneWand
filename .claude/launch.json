@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "mobile-remote",
+      "name": "phonewand",
       "runtimeExecutable": "node",
       "runtimeArgs": ["server.js"],
       "port": 8080

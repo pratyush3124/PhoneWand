@@ -2,7 +2,7 @@
 // Desktop app: the phone remote moves and clicks your real mouse, so it works
 // in any browser tab (or any app), not just pages that load remote-client.js.
 //
-//   npm run mouse                 (or double-click the packaged Mobile Remote app)
+//   npm run mouse                 (or double-click the packaged PhoneWand app)
 //
 // With no options it runs everything itself: a relay on localhost (reusing one that's
 // already running there), plus a free Cloudflare quick tunnel when `cloudflared` is
@@ -29,7 +29,7 @@ import { loadMouse } from "./native.js";
 import { ROOT, IS_PACKAGED } from "./resources.js";
 
 const ROOM_RE = /^[A-Za-z0-9_-]{4,64}$/;
-const USAGE = `Usage: ${IS_PACKAGED ? "mobile-remote" : "npm run mouse --"} [--server URL] [--public URL] [--port N] [--no-tunnel] [--room CODE] [--smooth light|medium|strong]`;
+const USAGE = `Usage: ${IS_PACKAGED ? "phonewand" : "npm run mouse --"} [--server URL] [--public URL] [--port N] [--no-tunnel] [--room CODE] [--smooth light|medium|strong]`;
 
 const stamp = () => new Date().toLocaleTimeString();
 const log = (text) => console.log(`[${stamp()}] ${text}`);
@@ -177,7 +177,7 @@ async function main() {
     console.log(USAGE);
     process.exit(0);
   }
-  console.log("\nMobile Remote: your phone is the mouse.\n");
+  console.log("\nPhoneWand: your phone is the mouse.\n");
 
   const room = opts.room ?? makeRoomCode();
   if (!ROOM_RE.test(room)) return fail("Room codes must be 4-64 letters, digits, - or _.");

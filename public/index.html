@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mobile Remote</title>
+  <title>PhoneWand</title>
   <meta name="description" content="Turn your phone into a Wii-style pointer for your laptop. Aim, tap to click, swipe to scroll, type from the phone. Nothing to install on the phone.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='9' y='3' width='14' height='26' rx='3.5' fill='%233867d6'/%3E%3Ccircle cx='16' cy='9' r='2.5' fill='%23f5a524'/%3E%3C/svg%3E">
   <style>
@@ -129,7 +129,7 @@
     <div class="wrap">
       <a class="brand" href="/">
         <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="9" y="3" width="14" height="26" rx="3.5" fill="var(--accent)"/><circle cx="16" cy="9" r="2.5" fill="var(--ring)"/></svg>
-        Mobile Remote
+        PhoneWand
       </a>
       <div class="links">
         <a class="opt" href="#how">How it works</a>
@@ -144,7 +144,7 @@
       <div>
         <span class="eyebrow">No app to install on the phone</span>
         <h1>Point your phone.<br><em>Click</em> the screen.</h1>
-        <p class="lede">Mobile Remote turns any phone into a Wii-style pointer for your laptop. Aim the top edge at the screen and the cursor follows. Tap to click, swipe to scroll, type on the phone's keyboard.</p>
+        <p class="lede">PhoneWand turns any phone into a Wii-style pointer for your laptop. Aim the top edge at the screen and the cursor follows. Tap to click, swipe to scroll, type on the phone's keyboard.</p>
         <div class="ctas">
           <a class="btn primary" id="heroDownload" href="#get">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
@@ -194,7 +194,7 @@
       <h2>Set up in under a minute</h2>
       <p class="sub">The phone only needs its web browser. Your laptop runs a small helper that pairs with it over a QR code.</p>
       <div class="steps">
-        <div class="card"><h3>Run the app</h3><p>Start Mobile Remote on your laptop. It opens a secure link for your phone and shows a QR code.</p></div>
+        <div class="card"><h3>Run the app</h3><p>Start PhoneWand on your laptop. It opens a secure link for your phone and shows a QR code.</p></div>
         <div class="card"><h3>Scan the code</h3><p>Point your phone's camera at the QR code and tap <b>Start motion</b>. On iPhone, allow motion access.</p></div>
         <div class="card"><h3>Point at 4 corners</h3><p>Aim the phone's top edge at each corner of the screen and tap. After that, the cursor goes where you point.</p></div>
       </div>
@@ -275,7 +275,7 @@
 
   <footer>
     <div class="wrap">
-      <span>Mobile Remote</span>
+      <span>PhoneWand</span>
       <span><a href="/play">Playground</a> · <a href="/yesno">Yes / No</a> · <a href="/phone">Phone page</a></span>
     </div>
   </footer>
@@ -299,7 +299,7 @@
       let files = [];
       try { files = (await (await fetch("/downloads/")).json()).files || []; } catch {}
       const builds = files.map((f) => {
-        const m = f.name.match(/^mobile-remote-(windows|macos|linux)-([a-z0-9]+)\./);
+        const m = f.name.match(/^phonewand-(windows|macos|linux)-([a-z0-9]+)\./);
         return m && { ...f, os: m[1], arch: m[2] };
       }).filter(Boolean);
       const os = myOs();

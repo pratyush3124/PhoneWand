@@ -1,6 +1,6 @@
 # Web app (landing page, demos, relay). Deploy anywhere that gives you HTTPS
 # (Render, Fly.io, Railway, Cloud Run...): phones need HTTPS for motion sensors.
-#   docker build -t mobile-remote . && docker run -p 8080:8080 mobile-remote
+#   docker build -t phonewand . && docker run -p 8080:8080 phonewand
 # Desktop builds placed in downloads/ before building are offered on the landing page.
 FROM node:22-alpine
 WORKDIR /app

@@ -55,7 +55,7 @@ const room = () => "T" + Math.random().toString(36).slice(2, 10);
 test("serves app, phone page, scripts and QR library", async () => {
   for (const [p, type, text] of [
     ["/", "text/html", "Point your phone"],
-    ["/yesno", "text/html", "Mobile Remote Demo"],
+    ["/yesno", "text/html", "PhoneWand Demo"],
     ["/healthz", "text/plain", "ok"],
     ["/phone", "text/html", "Phone Remote"],
     ["/remote-client.js", "text/javascript", "connectRemote"],

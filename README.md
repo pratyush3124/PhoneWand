@@ -1,4 +1,4 @@
-# Mobile Remote
+# PhoneWand
 
 Use your phone like a Wii remote for a web app on your laptop. Aim the **top edge** of the phone at the screen.
 
@@ -73,8 +73,8 @@ On the Yes/No page: `←` highlights Yes, `→` highlights No, `↓` clears, `En
 
 `npm run build:desktop` packages the desktop helper below as a single executable for the OS you run it on (Node's single-executable-application support, no Node needed on the target machine):
 
-- `dist/mobile-remote-<os>-<arch>/`: `Mobile Remote.exe` (or `mobile-remote` on macOS/Linux), a `resources/` folder (web pages, the native mouse library) and a `README.txt`
-- `downloads/mobile-remote-<os>-<arch>.zip` (`.tar.gz` on Linux): the archive the landing page offers. The web app serves everything in `downloads/` at `/downloads/<file>`, and lists it at `/downloads/`.
+- `dist/phonewand-<os>-<arch>/`: `PhoneWand.exe` (or `phonewand` on macOS/Linux), a `resources/` folder (web pages, the native mouse library) and a `README.txt`
+- `downloads/phonewand-<os>-<arch>.zip` (`.tar.gz` on Linux): the archive the landing page offers. The web app serves everything in `downloads/` at `/downloads/<file>`, and lists it at `/downloads/`.
 
 Double-clicking the app starts its own relay, opens a Cloudflare quick tunnel when `cloudflared` is installed (on PATH, in its default install folder, or next to the app), and prints the QR code. No terminal setup needed.
 
@@ -87,14 +87,14 @@ The builds aren't code-signed: Windows SmartScreen shows "unknown publisher" (Mo
 Phones need HTTPS, so hosting the web app on any HTTPS platform removes the tunnel step for the browser demos:
 
 ```bash
-docker build -t mobile-remote .
+docker build -t phonewand .
 ```
 
 ```bash
-docker run -p 8080:8080 mobile-remote
+docker run -p 8080:8080 phonewand
 ```
 
-The image has the landing page, demos and relay (no desktop parts) and includes whatever is in `downloads/` at build time; or set `DOWNLOADS_DIR` to a mounted folder. `/healthz` returns `ok`. The desktop app can then use it instead of its own relay and tunnel: `"Mobile Remote.exe" --server https://your-host`.
+The image has the landing page, demos and relay (no desktop parts) and includes whatever is in `downloads/` at build time; or set `DOWNLOADS_DIR` to a mounted folder. `/healthz` returns `ok`. The desktop app can then use it instead of its own relay and tunnel: `"PhoneWand.exe" --server https://your-host`.
 
 ## Control your whole desktop (any browser tab)
 

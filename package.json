@@ -1,5 +1,5 @@
 {
-  "name": "mobile-remote",
+  "name": "phonewand",
   "version": "1.0.0",
   "description": "Use your phone as a Wii-style pointer for a web app, or for your whole desktop mouse",
   "type": "module",

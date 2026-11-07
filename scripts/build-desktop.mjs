@@ -3,7 +3,7 @@
 //
 //   npm run build:desktop
 //
-// Output: dist/mobile-remote-<os>-<arch>/ and an archive of it in downloads/,
+// Output: dist/phonewand-<os>-<arch>/ and an archive of it in downloads/,
 // which the web app serves on its landing page. Build each OS on that OS
 // (the GitHub Actions workflow in .github/workflows/release.yml does all three).
 import fs from "node:fs";
@@ -16,11 +16,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const OS = { win32: "windows", darwin: "macos", linux: "linux" }[process.platform];
 if (!OS) throw new Error(`Can't package for ${process.platform}`);
-const name = `mobile-remote-${OS}-${process.arch}`;
+const name = `phonewand-${OS}-${process.arch}`;
 const dist = path.join(root, "dist");
 const work = path.join(dist, "build");
 const out = path.join(dist, name);
-const exeName = process.platform === "win32" ? "Mobile Remote.exe" : "mobile-remote";
+const exeName = process.platform === "win32" ? "PhoneWand.exe" : "phonewand";
 const exe = path.join(out, exeName);
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { stdio: "inherit", ...opts });
 const step = (s) => console.log(`\n> ${s}`);
@@ -80,7 +80,7 @@ const permissions = {
   darwin: "First run: right-click the app > Open (it isn't notarized). Then allow your terminal under\nSystem Settings > Privacy & Security > Accessibility, so it can move the mouse.",
   linux: "Needs an X11 session (Wayland blocks synthetic mouse input).",
 }[process.platform];
-fs.writeFileSync(path.join(out, "README.txt"), `Mobile Remote ${pkg.version}: your phone is the mouse
+fs.writeFileSync(path.join(out, "README.txt"), `PhoneWand ${pkg.version}: your phone is the mouse
 =====================================================
 
 1. ${start}
