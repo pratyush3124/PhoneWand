@@ -1,7 +1,7 @@
 // Builds the static site for hosts without WebSockets (Vercel): landing page,
 // demo pages, QR library and the desktop downloads, into site/.
 //   npm run build:web && vercel deploy --prod
-//   npm run build:web -- --base /PhoneWand/     (GitHub Pages project site, served under a subpath)
+//   npm run build:web -- --base /sub/           (static host serving the site under a subpath)
 //   npm run build:web -- --relay https://phonewand.onrender.com   (demos pair through this hosted relay)
 // The relay isn't included; the landing page notices (no /healthz) and says so.
 import fs from "node:fs";
@@ -28,7 +28,7 @@ const files = fs.readdirSync(path.join(root, "downloads"))
     return { name: f, size: fs.statSync(path.join(dl, f)).size };
   });
 fs.writeFileSync(path.join(dl, "index.json"), JSON.stringify({ files }));
-// Hosts without rewrites (GitHub Pages) serve /yesno from yesno.html.
+// Hosts without rewrites (plain static hosts) serve /yesno from yesno.html.
 fs.copyFileSync(path.join(site, "app.html"), path.join(site, "yesno.html"));
 
 // Root-relative links and imports ("/play", "/pairing.js") point under the base path.
