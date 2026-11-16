@@ -27,9 +27,12 @@ export function makeRoomCode(length = 8) {
   return Array.from(bytes, (b) => ALPHABET[b % ALPHABET.length]).join("");
 }
 
+// Relay origin baked in by `npm run build:web -- --relay URL` (static hosts have no relay of their own).
+const RELAY = "";
+
 export function connectRemote({
   room,
-  server = location.origin,
+  server = RELAY || location.origin,
   onHighlight,
   onClick,
   onTilt,

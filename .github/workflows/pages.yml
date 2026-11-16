@@ -24,7 +24,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build:web -- --base /${{ github.event.repository.name }}/
+      - run: npm run build:web -- --base /${{ github.event.repository.name }}/ --relay "$RELAY_URL"
+        env:
+          # Hosted relay (Render). Override with a RELAY_URL repo variable.
+          RELAY_URL: ${{ vars.RELAY_URL || 'https://phonewand.onrender.com' }}
       - name: Push site/ to gh-pages
         run: |
           cd site

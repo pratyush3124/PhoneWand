@@ -2,13 +2,14 @@
 // demo pages, QR library and the desktop downloads, into site/.
 //   npm run build:web && vercel deploy --prod
 //   npm run build:web -- --base /PhoneWand/     (GitHub Pages project site, served under a subpath)
+//   npm run build:web -- --relay https://phonewand.onrender.com   (demos pair through this hosted relay)
 // The relay isn't included; the landing page notices (no /healthz) and says so.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-const { values: opts } = parseArgs({ options: { base: { type: "string", default: "/" } } });
+const { values: opts } = parseArgs({ options: { base: { type: "string", default: "/" }, relay: { type: "string", default: "" } } });
 const base = ("/" + opts.base + "/").replace(/\/+/g, "/");
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -35,6 +36,14 @@ if (base !== "/") {
   for (const f of fs.readdirSync(site).filter((f) => /\.(html|js)$/.test(f))) {
     const file = path.join(site, f);
     fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace(/((?:href|src)\s*=\s*|from\s+|import\(|fetch\()(["'`])\/(?!\/)/g, `$1$2${base}`));
+  }
+}
+// Point the demos at a hosted relay (the static host can't serve WebSockets).
+if (opts.relay) { // empty string = no relay
+  const relay = new URL(opts.relay).origin;
+  for (const f of ["remote-client.js", "phone.html", "index.html"]) {
+    const file = path.join(site, f);
+    fs.writeFileSync(file, fs.readFileSync(file, "utf8").split('const RELAY = "";').join(`const RELAY = ${JSON.stringify(relay)};`));
   }
 }
 console.log(`site/ (base ${base})  ready with ${files.length} download(s): ${files.map((f) => f.name).join(", ") || "none"}`);

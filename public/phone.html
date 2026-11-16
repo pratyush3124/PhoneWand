@@ -238,8 +238,9 @@ $("roomLabel").textContent = room || "";
 function setStatus(ok, text) { $("status").dataset.ok = String(ok); $("statusText").textContent = text; }
 function connect() {
   if (!room) return;
-  const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  ws = new WebSocket(`${proto}//${location.host}/ws?role=phone&room=${encodeURIComponent(room)}`);
+  const RELAY = ""; // set by `npm run build:web -- --relay URL`
+  const wsBase = RELAY ? RELAY.replace(/^http/, "ws") : `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`;
+  ws = new WebSocket(`${wsBase}/ws?role=phone&room=${encodeURIComponent(room)}`);
   ws.onopen = () => { wsOpen = true; retry = 0; setStatus("wait", "Connected · waiting for laptop"); sendPower(); };
   ws.onmessage = (e) => {
     let msg; try { msg = JSON.parse(e.data); } catch { return; }
